@@ -300,9 +300,9 @@ run_build() {
                     echo "Setting active build profile to 'minimal'"
                     set_active_build_profile "minimal"
                 else
-                    # Create active_profile.txt directly
-                    echo "minimal" > active_profile.txt
-                    echo "Created active_profile.txt with 'minimal' profile"
+                    # Create active_profile.txt directly with absolute path
+                    echo "minimal" > "$BUILD_DIR/active_profile.txt"
+                    echo "Created $BUILD_DIR/active_profile.txt with 'minimal' profile"
                 fi
             fi
 

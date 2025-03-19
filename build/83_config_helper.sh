@@ -257,22 +257,34 @@ set_active_build_profile() {
 
 # Function to get the active build profile
 get_active_build_profile() {
-    # If environment variable is set, use it
+    # First, check if BUILD_TYPE is set to minimal explicitly
+    if [ "${BUILD_TYPE:-}" = "minimal" ]; then
+        log "INFO" "BUILD_TYPE=minimal detected, using 'minimal' profile"
+        export ACTIVE_BUILD_PROFILE="minimal"
+        echo "minimal"
+        return 0
+    fi
+
+    # Next, if environment variable is set, use it
     if [ -n "${ACTIVE_BUILD_PROFILE:-}" ]; then
+        log "INFO" "Using active profile from environment: $ACTIVE_BUILD_PROFILE"
         echo "$ACTIVE_BUILD_PROFILE"
         return 0
     fi
     
     # Otherwise, try to read from file
     local profile_file="${BUILD_DIR:-$(pwd)}/active_profile.txt"
+    log "INFO" "Checking for active profile file: $profile_file"
     if [ -f "$profile_file" ]; then
         ACTIVE_BUILD_PROFILE=$(cat "$profile_file")
         export ACTIVE_BUILD_PROFILE
+        log "INFO" "Read active profile from file: $ACTIVE_BUILD_PROFILE"
         echo "$ACTIVE_BUILD_PROFILE"
         return 0
     fi
     
     # Default if no profile is set
+    log "INFO" "No active profile found, defaulting to standard"
     echo "standard"
     return 0
 }
