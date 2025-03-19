@@ -222,8 +222,8 @@ echo "[INFO] Installing required packages"
 echo "[DEBUG] Package list: $PACKAGES"
 
 # Try installing packages with ignore flag to continue despite errors
-echo "[DEBUG] Running: apk add --cache-dir=/var/cache/apk -i $PACKAGES"
-apk add --cache-dir=/var/cache/apk -i $PACKAGES || true
+echo "[DEBUG] Running: apk add --cache-dir=/var/cache/apk -i --no-interactive $PACKAGES"
+apk add --cache-dir=/var/cache/apk -i --no-interactive $PACKAGES || true
 
 echo "[INFO] Verifying core packages installed correctly"
 # Check status of core packages that are essential
@@ -232,7 +232,7 @@ for pkg in $CORE_PACKAGES; do
     if ! apk info --cache-dir=/var/cache/apk -e "$pkg" >/dev/null 2>&1; then
         echo "[ERROR] Essential package $pkg not installed properly"
         echo "[DEBUG] Trying to install $pkg explicitly"
-        apk add --cache-dir=/var/cache/apk "$pkg" || echo "[ERROR] Failed to install $pkg"
+        apk add --cache-dir=/var/cache/apk --no-interactive "$pkg" || echo "[ERROR] Failed to install $pkg"
     else
         echo "[INFO] ✓ Essential package $pkg installed"
     fi
@@ -247,7 +247,7 @@ if [ "${INCLUDE_ZFS:-true}" = "true" ]; then
         # Try to find the right variant
         if ZFS_PKG=$(apk search --cache-dir=/var/cache/apk "zfs" | grep -E "^zfs-" | head -n1); then
             echo "[INFO] Found alternative ZFS package: $ZFS_PKG, attempting to install"
-            apk add --cache-dir=/var/cache/apk -i "$ZFS_PKG" || echo "[WARNING] Failed to install $ZFS_PKG"
+            apk add --cache-dir=/var/cache/apk -i --no-interactive "$ZFS_PKG" || echo "[WARNING] Failed to install $ZFS_PKG"
         else
             echo "[WARNING] No suitable ZFS package found, continuing without ZFS support"
         fi
