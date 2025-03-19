@@ -55,10 +55,11 @@ usage() {
     echo "Examples:"
     echo "  $0                    Build with default settings"
     echo "  $0 -c                 Clean and rebuild"
-    echo "  $0 -b \"--minimal\"     Build with minimal configuration (passed via passthrough)"
+    echo "  $0 -b \"--profile=minimal\"    Build with minimal profile"
+    echo "  $0 -b \"--profile=standard\"   Build with standard profile (default)"
+    echo "  $0 -b \"--profile=full\"       Build with full profile"
     echo "  $0 -i                 Launch interactive shell in the container"
     echo "  $0 --max-resources    Use maximum available system resources"
-    echo "  $0 -b \"--full\" --max-resources  Build with all features using max resources"
     echo "  $0 --make-verbose     Build with verbose make output (V=1)"
     echo "  $0 --make-quiet       Build with quiet make output (V=0, default)"
     echo ""
@@ -308,12 +309,39 @@ else
     CONTAINER_EXIT=$(docker inspect --format='{{.State.ExitCode}}' onefilelinux-builder 2>/dev/null || echo "unknown")
     echo -e "${BLUE}[DEBUG]${NC} Container onefilelinux-builder exit code: $CONTAINER_EXIT"
     
-    # Check for the output file first as the primary indicator of success
-    if [ -f "$PROJECT_DIR/output/OneFileLinux.efi" ]; then
+    # Check for output files (handling all naming patterns)
+    echo -e "${BLUE}[INFO]${NC} Checking for build output files..."
+    
+    # List all EFI files in the output directory
+    output_files=$(find "$PROJECT_DIR/output" -name "*.efi" | sort)
+    
+    if [ -n "$output_files" ]; then
         echo -e "${GREEN}[SUCCESS]${NC} OneFileLinux build completed successfully!"
-        FILE_SIZE=$(du -h "$PROJECT_DIR/output/OneFileLinux.efi" | cut -f1)
-        echo -e "${GREEN}[SUCCESS]${NC} Created OneFileLinux.efi (Size: $FILE_SIZE)"
-        echo -e "${BLUE}[INFO]${NC} Output file: $PROJECT_DIR/output/OneFileLinux.efi"
+        
+        # Display each output file
+        echo -e "${BLUE}[INFO]${NC} Output files created:"
+        for efi_file in $output_files; do
+            FILE_SIZE=$(du -h "$efi_file" | cut -f1)
+            file_basename=$(basename "$efi_file")
+            echo -e "  - ${GREEN}$file_basename${NC} (Size: $FILE_SIZE)"
+        done
+        
+        # Select the main file to display for backward compatibility messaging
+        # Prioritize profile-specific files first, then fallback to generic name
+        if echo "$output_files" | grep -q "custom"; then
+            MAIN_FILE=$(echo "$output_files" | grep "custom" | head -1)
+        elif echo "$output_files" | grep -q "standard"; then
+            MAIN_FILE=$(echo "$output_files" | grep "standard" | head -1)
+        elif echo "$output_files" | grep -q "minimal"; then
+            MAIN_FILE=$(echo "$output_files" | grep "minimal" | head -1)
+        elif echo "$output_files" | grep -q "full"; then
+            MAIN_FILE=$(echo "$output_files" | grep "full" | head -1)
+        else
+            # Fallback to first file (likely OneFileLinux.efi)
+            MAIN_FILE=$(echo "$output_files" | head -1)
+        fi
+        
+        echo -e "${BLUE}[INFO]${NC} Primary output file: $MAIN_FILE"
         
         # Display build timing information if available
         TIMING_LOG="$PROJECT_DIR/build/build_timing.log"
@@ -325,6 +353,8 @@ else
             echo -e "${BLUE}[INFO]${NC} Full timing log saved to: $TIMING_LOG"
         fi
     else
+        # No EFI files found - check for errors
+        
         # Check if compose itself failed 
         if [ $COMPOSE_EXIT_CODE -ne 0 ]; then
             echo -e "${RED}[ERROR]${NC} Docker Compose execution failed with exit code $COMPOSE_EXIT_CODE."
@@ -332,8 +362,12 @@ else
             exit 1
         else
             # Compose succeeded but no output file - container likely exited with error
-            echo -e "${RED}[ERROR]${NC} Build process failed. Container exited without creating output file."
+            echo -e "${RED}[ERROR]${NC} Build process failed. Container exited without creating any EFI files."
             echo -e "${YELLOW}[WARNING]${NC} Check container logs for details."
+            
+            # Check what files were actually created in the output directory
+            echo -e "${BLUE}[INFO]${NC} Files in output directory:"
+            ls -la "$PROJECT_DIR/output/"
             
             # Look for build errors in container logs
             if $COMPOSE_CMD logs | grep -i "error\|fail\|fatal" > /dev/null; then

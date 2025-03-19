@@ -12,7 +12,11 @@ RESUME=false
 CLEAN_END=false
 BUILD_STEP=""
 
-# Optional components
+# Default Build Profile (will be loaded from profile definitions)
+BUILD_PROFILE="standard"
+
+# Optional components with default values
+# These will be overridden by the selected build profile
 INCLUDE_ZFS=true
 INCLUDE_BTRFS=false
 INCLUDE_RECOVERY_TOOLS=true
@@ -188,11 +192,26 @@ EOF
 # Print current configuration
 print_config() {
     log "INFO" "Current build configuration:"
-    if [ "$INCLUDE_MINIMAL_KERNEL" = "true" ]; then
-        log "INFO" "  Build type: ${YELLOW}Minimal${NC} (optimized for size)"
+    
+    # Determine build profile if the function exists
+    local profile_name=""
+    if type -t get_build_profile_name &>/dev/null; then
+        profile_name=$(get_build_profile_name)
+        log "INFO" "  Build profile: ${GREEN}${profile_name}${NC}"
     else
-        log "INFO" "  Build type: ${GREEN}Standard${NC}"
+        # Fallback to basic detection
+        if [ "$INCLUDE_MINIMAL_KERNEL" = "true" ]; then
+            log "INFO" "  Build type: ${YELLOW}Minimal${NC} (optimized for size)"
+        else
+            log "INFO" "  Build type: ${GREEN}Standard${NC}"
+        fi
     fi
+    
+    # Show EFI output filename
+    if [ -n "$profile_name" ]; then
+        log "INFO" "  Output file: OneFileLinux-${profile_name}.efi"
+    fi
+    
     log "INFO" "  ZFS support: $(bool_to_str $INCLUDE_ZFS)"
     log "INFO" "  Btrfs support: $(bool_to_str $INCLUDE_BTRFS)"
     log "INFO" "  Recovery tools: $(bool_to_str $INCLUDE_RECOVERY_TOOLS)"
@@ -262,9 +281,12 @@ print_config() {
 # Print extended usage information
 usage_modules() {
     echo ""
-    echo "Build Options:"
-    echo "  --minimal              Minimal build optimized for size (~30-50% smaller)"
-    echo "  --full                 Full build with all available components"
+    echo "Build Profile Options:"
+    echo "  --minimal              Build with minimal profile (optimized for size, ~30-50% smaller)"
+    echo "  --standard             Build with standard profile (default)"
+    echo "  --full                 Build with full profile (all components)"
+    echo "  --profile=NAME         Specify a custom profile by name"
+    echo "  --list-profiles        List all available build profiles"
     echo ""
     echo "Size Optimization Options:"
     echo "  --with-compression     Enable EFI file compression (default: yes)"
@@ -293,18 +315,18 @@ usage_modules() {
     echo "  --no-password          Create root account with no password (unsafe)"
     echo "  --password-length=N    Set length of random password (default: 12)"
     echo ""
-    echo "Optional Modules:"
-    echo "  --with-zfs             Include ZFS filesystem support (default: yes)"
+    echo "Optional Modules (Override Profile Settings):"
+    echo "  --with-zfs             Include ZFS filesystem support (default in standard: yes)"
     echo "  --without-zfs          Exclude ZFS filesystem support"
-    echo "  --with-btrfs           Include Btrfs filesystem support (default: no)"
+    echo "  --with-btrfs           Include Btrfs filesystem support (default in standard: no)"
     echo "  --without-btrfs        Exclude Btrfs filesystem support"
-    echo "  --with-recovery-tools  Include data recovery tools (default: yes)"
+    echo "  --with-recovery-tools  Include data recovery tools (default in standard: yes)"
     echo "  --without-recovery-tools  Exclude data recovery tools"
-    echo "  --with-network-tools   Include network tools (default: yes)"
+    echo "  --with-network-tools   Include network tools (default in standard: yes)"
     echo "  --without-network-tools  Exclude network tools"
-    echo "  --with-crypto          Include encryption support (default: yes)"
+    echo "  --with-crypto          Include encryption support (default in standard: yes)"
     echo "  --without-crypto       Exclude encryption support"
-    echo "  --with-tui             Include Text User Interface (default: yes)"
+    echo "  --with-tui             Include Text User Interface (default in standard: yes)"
     echo "  --without-tui          Exclude Text User Interface"
     echo ""
     echo "Configuration Management:"
@@ -312,15 +334,16 @@ usage_modules() {
     echo "  --show-config          Display current build configuration"
     echo ""
     echo "Examples:"
-    echo "  $0 --without-zfs        Build without ZFS support"
-    echo "  $0 --minimal            Build with minimal components only"
-    echo "  $0 --with-btrfs --without-crypto  Custom component selection"
+    echo "  $0 --profile=standard   Build with standard profile"
+    echo "  $0 --list-profiles      List all available build profiles"
+    echo "  $0 --minimal            Build with minimal profile (no ZFS, minimal kernel)"
+    echo "  $0 --full               Build with full profile (all components)"
+    echo "  $0 --profile=standard --with-btrfs  Use standard profile but add Btrfs support"
+    echo "  $0 --profile=standard --without-zfs  Use standard profile but exclude ZFS"
     echo "  $0 --compression-tool=zstd  Use ZSTD for compression instead of UPX"
     echo "  $0 --minimal --compression-tool=xz  Minimal build with highest compression"
     echo "  $0 --without-compression  Disable compression for faster boot time"
     echo "  $0 --jobs=8             Use 8 parallel build jobs"
-    echo "  $0 --cache-dir=/tmp/cache  Use custom cache directory"
-    echo "  $0 --no-cache           Perform a clean build without caching"
     echo "  $0 --use-swap           Create swap file if system has low memory"
     echo "  $0 --password=mypassword  Set a specific root password"
     echo "  $0 --random-password    Generate a secure random root password"
@@ -384,6 +407,22 @@ process_args() {
             -C|--clean-end)
                 CLEAN_END=true
                 shift
+                ;;
+            --profile=*)
+                BUILD_PROFILE="${1#*=}"
+                # Apply the profile using the build_profiles module
+                apply_build_profile "$BUILD_PROFILE" || {
+                    log "ERROR" "Invalid build profile: $BUILD_PROFILE"
+                    log "INFO" "Available profiles:"
+                    list_build_profiles
+                    exit 1
+                }
+                log "SUCCESS" "Applied build profile: $BUILD_PROFILE"
+                shift
+                ;;
+            --list-profiles)
+                list_build_profiles
+                exit 0
                 ;;
             --with-zfs)
                 INCLUDE_ZFS=true
@@ -639,32 +678,24 @@ process_args() {
                 shift
                 ;;
             --minimal)
-                INCLUDE_ZFS=false
-                INCLUDE_BTRFS=false
-                INCLUDE_RECOVERY_TOOLS=false
-                INCLUDE_NETWORK_TOOLS=false
-                INCLUDE_CRYPTO=false
-                INCLUDE_TUI=false
-                INCLUDE_MINIMAL_KERNEL=true
+                apply_build_profile "minimal" || {
+                    log "ERROR" "Failed to apply minimal profile"
+                    exit 1
+                }
+                shift
+                ;;
+            --standard)
+                apply_build_profile "standard" || {
+                    log "ERROR" "Failed to apply standard profile"
+                    exit 1
+                }
                 shift
                 ;;
             --full)
-                INCLUDE_ZFS=true
-                INCLUDE_BTRFS=true
-                INCLUDE_RECOVERY_TOOLS=true
-                INCLUDE_NETWORK_TOOLS=true
-                INCLUDE_CRYPTO=true
-                INCLUDE_TUI=true
-                # Include all advanced package groups
-                INCLUDE_ADVANCED_FS=true
-                INCLUDE_DISK_DIAG=true
-                INCLUDE_NETWORK_DIAG=true
-                INCLUDE_SYSTEM_TOOLS=true
-                INCLUDE_DATA_RECOVERY=true
-                INCLUDE_BOOT_REPAIR=true
-                INCLUDE_EDITORS=true
-                INCLUDE_SECURITY=true
-                log "INFO" "Enabling full build with all components and advanced package groups"
+                apply_build_profile "full" || {
+                    log "ERROR" "Failed to apply full profile"
+                    exit 1
+                }
                 shift
                 ;;
             --save-config)

@@ -45,10 +45,10 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # For manual triggers, only build the selected type
-            echo "matrix={\"include\":[{\"name\":\"${{ github.event.inputs.build_type }}\",\"build_args\":\"${{ github.event.inputs.build_type == 'minimal' && '--minimal' || github.event.inputs.build_type == 'full' && '--full' || '--with-zfs --with-recovery-tools --with-network-tools' }} --compression-tool=upx\"}]}" >> $GITHUB_OUTPUT
+            echo "matrix={\"include\":[{\"name\":\"${{ github.event.inputs.build_type }}\",\"build_args\":\"--profile=${{ github.event.inputs.build_type }} --compression-tool=upx\"}]}" >> $GITHUB_OUTPUT
           else
             # For automatic triggers, build all types with UPX compression
-            echo "matrix={\"include\":[{\"name\":\"minimal\",\"build_args\":\"--minimal --compression-tool=upx\"},{\"name\":\"standard\",\"build_args\":\"--with-zfs --with-recovery-tools --with-network-tools --compression-tool=upx\"},{\"name\":\"full\",\"build_args\":\"--full --compression-tool=upx\"}]}" >> $GITHUB_OUTPUT
+            echo "matrix={\"include\":[{\"name\":\"minimal\",\"build_args\":\"--profile=minimal --compression-tool=upx\"},{\"name\":\"standard\",\"build_args\":\"--profile=standard --compression-tool=upx\"},{\"name\":\"full\",\"build_args\":\"--profile=full --compression-tool=upx\"}]}" >> $GITHUB_OUTPUT
           fi
 
   # Build job using Docker with the same setup as local builds
@@ -223,20 +223,67 @@ jobs:
       - name: Check for build artifacts
         id: check_files
         run: |
-          # Check if build produced the EFI file
-          if [ -f "./output/OneFileLinux.efi" ]; then
+          # Find all EFI files in the output directory
+          echo "Searching for build artifacts in ./output/"
+          ls -la ./output/ || true
+          
+          # Find EFI files (including those with custom names)
+          EFI_FILES=$(find ./output/ -name "*.efi" | sort)
+          
+          if [ -n "$EFI_FILES" ]; then
             echo "efi_file=true" >> $GITHUB_OUTPUT
-            du -h ./output/OneFileLinux.efi
-
-            # Display timing data if available
-            if [ -f "./build/build_timing.log" ]; then
-              echo "Build Timing Data:"
-              cat ./build/build_timing.log
+            
+            # Check if we have a profile-specific EFI first
+            PROFILE_EFI="./output/OneFileLinux-${{ matrix.name }}.efi"
+            GENERIC_EFI="./output/OneFileLinux.efi"
+            
+            # Look for custom profile names (contain 'custom' in the name)
+            CUSTOM_EFI=$(echo "$EFI_FILES" | grep -i "custom" | head -1)
+            
+            # Prioritize files in this order: Profile-specific > Custom > Generic
+            if [ -f "$PROFILE_EFI" ]; then
+              PRIMARY_EFI="$PROFILE_EFI"
+              echo "efi_path=$PROFILE_EFI" >> $GITHUB_OUTPUT
+              echo "Found profile-specific EFI file: $PROFILE_EFI"
+            elif [ -n "$CUSTOM_EFI" ] && [ -f "$CUSTOM_EFI" ]; then
+              PRIMARY_EFI="$CUSTOM_EFI"
+              echo "efi_path=$CUSTOM_EFI" >> $GITHUB_OUTPUT
+              echo "Found custom profile EFI file: $CUSTOM_EFI"
+            elif [ -f "$GENERIC_EFI" ]; then
+              PRIMARY_EFI="$GENERIC_EFI"
+              echo "efi_path=$GENERIC_EFI" >> $GITHUB_OUTPUT
+              echo "Found generic EFI file: $GENERIC_EFI"
+              
+              # Copy it to the profile-specific name for consistent artifacts
+              cp "$GENERIC_EFI" "$PROFILE_EFI"
+              echo "Copied to: $PROFILE_EFI"
+            else
+              # If none of the expected names are found, use the first EFI file
+              PRIMARY_EFI=$(echo "$EFI_FILES" | head -1)
+              echo "efi_path=$PRIMARY_EFI" >> $GITHUB_OUTPUT
+              echo "Found alternative EFI file: $PRIMARY_EFI"
             fi
+            
+            # Show information about the primary EFI file
+            du -h "$PRIMARY_EFI"
+            
+            # List all EFI files found (for comprehensive logging)
+            echo "All EFI files found:"
+            for efi in $EFI_FILES; do
+              file_size=$(du -h "$efi" | cut -f1)
+              echo "- $efi (Size: $file_size)"
+            done
           else
             echo "efi_file=false" >> $GITHUB_OUTPUT
-            echo "Build failed to produce OneFileLinux.efi"
+            echo "Build failed to produce any EFI file"
+            ls -la ./output/
             exit 1
+          fi
+
+          # Display timing data if available
+          if [ -f "./build/build_timing.log" ]; then
+            echo "Build Timing Data:"
+            cat ./build/build_timing.log
           fi
 
       - name: Upload build artifact
@@ -244,7 +291,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: OneFileLinux-${{ matrix.name }}
-          path: ./output/OneFileLinux.efi
+          # Upload all EFI files to ensure custom profiles are included
+          path: |
+            ./output/*.efi
           if-no-files-found: error
 
       - name: Upload build timing log
@@ -272,17 +321,59 @@ jobs:
         run: |
           mkdir -p release
 
-          # Only copy files that exist
-          if [ -f "./artifacts/OneFileLinux-minimal/OneFileLinux.efi" ]; then
-            cp ./artifacts/OneFileLinux-minimal/OneFileLinux.efi ./release/OneFileLinux-minimal.efi
-          fi
-          if [ -f "./artifacts/OneFileLinux-standard/OneFileLinux.efi" ]; then
-            cp ./artifacts/OneFileLinux-standard/OneFileLinux.efi ./release/OneFileLinux-standard.efi
-          fi
-          if [ -f "./artifacts/OneFileLinux-full/OneFileLinux.efi" ]; then
-            cp ./artifacts/OneFileLinux-full/OneFileLinux.efi ./release/OneFileLinux-full.efi
-          fi
+          # Copy all EFI files from each artifact directory to the release directory
+          echo "Examining artifact directories:"
+          ls -la ./artifacts/
+          
+          # Loop through all artifact directories
+          for artifact_dir in ./artifacts/OneFileLinux-*/; do
+            if [ -d "$artifact_dir" ]; then
+              echo "Processing artifact directory: $artifact_dir"
+              ls -la "$artifact_dir"
+              
+              # Get the artifact name (last part of the directory path)
+              artifact_name=$(basename "$artifact_dir")
+              
+              # Find all EFI files in the artifact directory
+              for efi_file in "$artifact_dir"/*.efi; do
+                if [ -f "$efi_file" ]; then
+                  # Use the original filename if it's profile-specific (contains a hyphen)
+                  # Otherwise rename it based on the artifact name
+                  efi_basename=$(basename "$efi_file")
+                  if [[ "$efi_basename" == *"-"* ]]; then
+                    # Already has a profile in the name, keep it
+                    cp "$efi_file" "./release/"
+                    echo "Copied $efi_file to ./release/$efi_basename (keeping original name)"
+                  else
+                    # Standard OneFileLinux.efi file, rename based on artifact
+                    profile_name=${artifact_name#OneFileLinux-}
+                    cp "$efi_file" "./release/OneFileLinux-$profile_name.efi"
+                    echo "Copied $efi_file to ./release/OneFileLinux-$profile_name.efi"
+                  fi
+                fi
+              done
+            fi
+          done
+          
+          # Handle special case for custom builds that might have a different naming pattern
+          for artifact_dir in ./artifacts/OneFileLinux-custom*/; do
+            if [ -d "$artifact_dir" ]; then
+              echo "Processing custom artifact directory: $artifact_dir"
+              # Copy all EFI files as-is
+              for efi_file in "$artifact_dir"/*.efi; do
+                if [ -f "$efi_file" ]; then
+                  cp "$efi_file" "./release/"
+                  echo "Copied custom build file: $efi_file"
+                fi
+              done
+            fi
+          done
 
+          # Check what EFI files we have
+          echo "Release files:"
+          ls -la ./release/
+
+          # Create zip with all EFI files
           cd release
           zip -r OneFileLinux-release.zip *.efi
 

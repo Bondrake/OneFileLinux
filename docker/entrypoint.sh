@@ -112,6 +112,12 @@ fix_kernel_permissions() {
     else
         log_info "Kernel source directory not found, skipping permission fix"
     fi
+    
+    # Make sure all library scripts are executable
+    log_info "Making all library scripts executable"
+        
+    # Make core library scripts executable
+    find /onefilelinux/build -name "8*_*.sh" -exec chmod +x {} \; 2>/dev/null || true
 }
 
 # Set up performance optimizations

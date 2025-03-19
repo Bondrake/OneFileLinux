@@ -361,14 +361,30 @@ create_efi() {
         }
     fi
     
+    # Determine the appropriate filename suffix based on build profile
+    local profile_name="standard"
+    
+    # If the get_build_profile_name function exists, use it to determine the profile
+    if type -t get_build_profile_name &>/dev/null; then
+        profile_name=$(get_build_profile_name)
+    fi
+    
+    # Create the EFI filename using the profile name
+    local efi_file_name="OneFileLinux-${profile_name}.efi"
+    
     # Create EFI file
-    log "INFO" "Creating OneFileLinux.efi"
+    log "INFO" "Creating ${efi_file_name}"
     if [ -f "arch/x86/boot/bzImage" ]; then
-        cp arch/x86/boot/bzImage "$OUTPUT_DIR/OneFileLinux.efi" || {
+        cp arch/x86/boot/bzImage "$OUTPUT_DIR/${efi_file_name}" || {
             log "ERROR" "Failed to copy kernel bzImage to output directory"
             return 1
         }
-        log "SUCCESS" "Kernel bzImage copied to OneFileLinux.efi"
+        log "SUCCESS" "Kernel bzImage copied to ${efi_file_name}"
+        
+        # Create a symlink to the generic name for backward compatibility
+        ln -sf "${efi_file_name}" "$OUTPUT_DIR/OneFileLinux.efi" || {
+            log "WARNING" "Failed to create backward compatibility symlink"
+        }
     else
         log "ERROR" "Failed to find kernel bzImage - kernel build may have failed"
         # Try to check if we can find any error messages
@@ -395,7 +411,7 @@ create_efi() {
     fi
     
     # Record original size
-    local original_size=$(du -h "$OUTPUT_DIR/OneFileLinux.efi" | cut -f1)
+    local original_size=$(du -h "$OUTPUT_DIR/${efi_file_name}" | cut -f1)
     log "INFO" "Original EFI size: $original_size"
     
     # Apply compression if enabled
@@ -405,25 +421,25 @@ create_efi() {
         log "INFO" "Selected compression tool: $COMPRESSION_TOOL"
         
         # Create a backup of the original file
-        cp "$OUTPUT_DIR/OneFileLinux.efi" "$OUTPUT_DIR/OneFileLinux.efi.original"
+        cp "$OUTPUT_DIR/${efi_file_name}" "$OUTPUT_DIR/${efi_file_name}.original"
         
         case "$COMPRESSION_TOOL" in
             "upx")
                 if command -v upx &> /dev/null; then
                     # Apply UPX compression
                     log "INFO" "Compressing with UPX (faster decompression, good size reduction)..."
-                    if upx --best --lzma "$OUTPUT_DIR/OneFileLinux.efi"; then
-                        COMPRESSED_SIZE=$(du -h "$OUTPUT_DIR/OneFileLinux.efi" | cut -f1)
+                    if upx --best --lzma "$OUTPUT_DIR/${efi_file_name}"; then
+                        COMPRESSED_SIZE=$(du -h "$OUTPUT_DIR/${efi_file_name}" | cut -f1)
                         log "SUCCESS" "UPX compression successful"
                         log "INFO" "Original size: $original_size, Compressed size: $COMPRESSED_SIZE"
                     else
                         log "WARNING" "UPX compression failed, restoring original file"
-                        mv "$OUTPUT_DIR/OneFileLinux.efi.original" "$OUTPUT_DIR/OneFileLinux.efi"
+                        mv "$OUTPUT_DIR/${efi_file_name}.original" "$OUTPUT_DIR/${efi_file_name}"
                     fi
                 else
                     log "ERROR" "UPX not found. Please install UPX: apt-get install upx-ucl"
                     log "INFO" "Restoring original uncompressed file"
-                    mv "$OUTPUT_DIR/OneFileLinux.efi.original" "$OUTPUT_DIR/OneFileLinux.efi"
+                    mv "$OUTPUT_DIR/${efi_file_name}.original" "$OUTPUT_DIR/${efi_file_name}"
                 fi
                 ;;
                 
@@ -433,23 +449,23 @@ create_efi() {
                     log "INFO" "Compressing with XZ (higher compression ratio, slower decompression)..."
                     # Note: XZ compression would require a decompression stub in a real implementation
                     # This is a simplified version for demonstration
-                    if xz -z -9 -e -f --keep "$OUTPUT_DIR/OneFileLinux.efi"; then
+                    if xz -z -9 -e -f --keep "$OUTPUT_DIR/${efi_file_name}"; then
                         # In a real implementation, we would need to prepend a decompression stub
                         # For now, we'll just rename the file
-                        mv "$OUTPUT_DIR/OneFileLinux.efi.xz" "$OUTPUT_DIR/OneFileLinux.efi.compressed"
-                        COMPRESSED_SIZE=$(du -h "$OUTPUT_DIR/OneFileLinux.efi.compressed" | cut -f1)
+                        mv "$OUTPUT_DIR/${efi_file_name}.xz" "$OUTPUT_DIR/${efi_file_name}.compressed"
+                        COMPRESSED_SIZE=$(du -h "$OUTPUT_DIR/${efi_file_name}.compressed" | cut -f1)
                         log "WARNING" "XZ compression completed but requires a custom decompression stub"
                         log "INFO" "Original size: $original_size, Compressed size: $COMPRESSED_SIZE"
                         log "INFO" "Using original uncompressed file for compatibility"
-                        mv "$OUTPUT_DIR/OneFileLinux.efi.original" "$OUTPUT_DIR/OneFileLinux.efi"
+                        mv "$OUTPUT_DIR/${efi_file_name}.original" "$OUTPUT_DIR/${efi_file_name}"
                     else
                         log "WARNING" "XZ compression failed, restoring original file"
-                        mv "$OUTPUT_DIR/OneFileLinux.efi.original" "$OUTPUT_DIR/OneFileLinux.efi"
+                        mv "$OUTPUT_DIR/${efi_file_name}.original" "$OUTPUT_DIR/${efi_file_name}"
                     fi
                 else
                     log "ERROR" "XZ not found. Please install XZ"
                     log "INFO" "Restoring original uncompressed file"
-                    mv "$OUTPUT_DIR/OneFileLinux.efi.original" "$OUTPUT_DIR/OneFileLinux.efi"
+                    mv "$OUTPUT_DIR/${efi_file_name}.original" "$OUTPUT_DIR/${efi_file_name}"
                 fi
                 ;;
                 
@@ -459,41 +475,41 @@ create_efi() {
                     log "INFO" "Compressing with ZSTD (balanced compression ratio and speed)..."
                     # Note: ZSTD compression would require a decompression stub in a real implementation
                     # This is a simplified version for demonstration
-                    if zstd -19 -f "$OUTPUT_DIR/OneFileLinux.efi" -o "$OUTPUT_DIR/OneFileLinux.efi.zst"; then
+                    if zstd -19 -f "$OUTPUT_DIR/${efi_file_name}" -o "$OUTPUT_DIR/${efi_file_name}.zst"; then
                         # In a real implementation, we would need to prepend a decompression stub
                         # For now, we'll just rename the file
-                        mv "$OUTPUT_DIR/OneFileLinux.efi.zst" "$OUTPUT_DIR/OneFileLinux.efi.compressed"
-                        COMPRESSED_SIZE=$(du -h "$OUTPUT_DIR/OneFileLinux.efi.compressed" | cut -f1)
+                        mv "$OUTPUT_DIR/${efi_file_name}.zst" "$OUTPUT_DIR/${efi_file_name}.compressed"
+                        COMPRESSED_SIZE=$(du -h "$OUTPUT_DIR/${efi_file_name}.compressed" | cut -f1)
                         log "WARNING" "ZSTD compression completed but requires a custom decompression stub"
                         log "INFO" "Original size: $original_size, Compressed size: $COMPRESSED_SIZE"
                         log "INFO" "Using original uncompressed file for compatibility"
-                        mv "$OUTPUT_DIR/OneFileLinux.efi.original" "$OUTPUT_DIR/OneFileLinux.efi"
+                        mv "$OUTPUT_DIR/${efi_file_name}.original" "$OUTPUT_DIR/${efi_file_name}"
                     else
                         log "WARNING" "ZSTD compression failed, restoring original file"
-                        mv "$OUTPUT_DIR/OneFileLinux.efi.original" "$OUTPUT_DIR/OneFileLinux.efi"
+                        mv "$OUTPUT_DIR/${efi_file_name}.original" "$OUTPUT_DIR/${efi_file_name}"
                     fi
                 else
                     log "ERROR" "ZSTD not found. Please install ZSTD"
                     log "INFO" "Restoring original uncompressed file"
-                    mv "$OUTPUT_DIR/OneFileLinux.efi.original" "$OUTPUT_DIR/OneFileLinux.efi"
+                    mv "$OUTPUT_DIR/${efi_file_name}.original" "$OUTPUT_DIR/${efi_file_name}"
                 fi
                 ;;
                 
             *)
                 log "ERROR" "Unknown compression tool: $COMPRESSION_TOOL"
                 log "INFO" "Restoring original uncompressed file"
-                mv "$OUTPUT_DIR/OneFileLinux.efi.original" "$OUTPUT_DIR/OneFileLinux.efi"
+                mv "$OUTPUT_DIR/${efi_file_name}.original" "$OUTPUT_DIR/${efi_file_name}"
                 ;;
         esac
         
         # Clean up backup if it exists
-        rm -f "$OUTPUT_DIR/OneFileLinux.efi.original"
+        rm -f "$OUTPUT_DIR/${efi_file_name}.original"
     else
         log "INFO" "Compression disabled"
     fi
     
-    local final_size=$(du -h "$OUTPUT_DIR/OneFileLinux.efi" | cut -f1)
-    log "SUCCESS" "OneFileLinux.efi created successfully (size: $final_size)"
+    local final_size=$(du -h "$OUTPUT_DIR/${efi_file_name}" | cut -f1)
+    log "SUCCESS" "${efi_file_name} created successfully (size: $final_size)"
     
     # Return to build directory
     cd "$BUILD_DIR"
