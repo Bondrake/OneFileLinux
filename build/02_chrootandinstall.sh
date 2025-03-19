@@ -187,8 +187,12 @@ echo "[INFO] Setting hostname"
 echo onefilelinux > /etc/hostname && hostname -F /etc/hostname
 echo 127.0.1.1 onefilelinux onefilelinux >> /etc/hosts
 
+echo "[INFO] Setting up APK cache directory"
+mkdir -p /var/cache/apk
+touch /var/cache/apk/APKCACHE.init
+
 echo "[INFO] Updating package lists"
-apk update
+apk update --cache-dir=/var/cache/apk
 
 # Enable community and testing repositories for additional packages
 # First check current repositories to avoid duplicates
@@ -208,23 +212,23 @@ fi
 
 echo "[INFO] Updated repositories:"
 cat /etc/apk/repositories
-apk update
+apk update --cache-dir=/var/cache/apk
 
 echo "[INFO] Upgrading installed packages"
-echo "[DEBUG] Running: apk upgrade --available --no-cache"
-if ! apk upgrade --available --no-cache; then
+echo "[DEBUG] Running: apk upgrade --available --cache-dir=/var/cache/apk"
+if ! apk upgrade --available --cache-dir=/var/cache/apk; then
     echo "[WARNING] Package upgrade had errors, but continuing anyway"
     # Show what's installed
     echo "[DEBUG] Currently installed packages:"
-    apk info
+    apk info --cache-dir=/var/cache/apk
 fi
 
 echo "[INFO] Installing required packages"
 echo "[DEBUG] Package list: $PACKAGES"
 
 # Try installing packages with verbose output
-echo "[DEBUG] Running: apk add --no-cache $PACKAGES"
-if ! apk add --no-cache $PACKAGES; then
+echo "[DEBUG] Running: apk add --cache-dir=/var/cache/apk $PACKAGES"
+if ! apk add --cache-dir=/var/cache/apk $PACKAGES; then
     echo "[ERROR] Failed to install some packages - checking which ones are problematic"
     
     # Convert space-separated string to array for safer iteration
@@ -238,18 +242,18 @@ if ! apk add --no-cache $PACKAGES; then
         fi
         
         echo "[DEBUG] Trying to install package: $pkg"
-        if ! apk add --no-cache "$pkg"; then
+        if ! apk add --cache-dir=/var/cache/apk "$pkg"; then
             echo "[ERROR] Problem package: $pkg is not available or has dependency issues"
             # Try to see if it exists in the repository but has dependency issues
-            if apk search -e "^$pkg$" | grep -q "$pkg"; then
+            if apk search --cache-dir=/var/cache/apk -e "^$pkg$" | grep -q "$pkg"; then
                 echo "[DEBUG] Package $pkg exists in the repository, likely a dependency issue"
                 # Show dependencies
-                apk info -R "$pkg"
+                apk info --cache-dir=/var/cache/apk -R "$pkg"
             else
                 echo "[DEBUG] Package $pkg not found in configured repositories"
                 # Show available similar packages
                 echo "[DEBUG] Similar packages available:"
-                apk search "$pkg"
+                apk search --cache-dir=/var/cache/apk "$pkg"
             fi
         else
             echo "[INFO] Successfully installed package: $pkg"
