@@ -309,22 +309,96 @@ else
     CONTAINER_EXIT=$(docker inspect --format='{{.State.ExitCode}}' onefilelinux-builder 2>/dev/null || echo "unknown")
     echo -e "${BLUE}[DEBUG]${NC} Container onefilelinux-builder exit code: $CONTAINER_EXIT"
     
-    # Check for output files (handling all naming patterns)
-    echo -e "${BLUE}[INFO]${NC} Checking for build output files..."
+    # Check for output files with timestamp verification
+    echo -e "${BLUE}[INFO]${NC} Checking for recent build output files..."
     
-    # List all EFI files in the output directory
-    output_files=$(find "$PROJECT_DIR/output" -name "*.efi" | sort)
+    # Check if active_profile.txt exists to determine expected output file
+    EXPECTED_EFI_FILE=""
+    if [ -f "$PROJECT_DIR/build/active_profile.txt" ]; then
+        ACTIVE_PROFILE=$(cat "$PROJECT_DIR/build/active_profile.txt")
+        EXPECTED_EFI_FILE="OneFileLinux-${ACTIVE_PROFILE}.efi"
+        echo -e "${BLUE}[INFO]${NC} Looking for expected output file: ${EXPECTED_EFI_FILE}"
+    fi
     
-    if [ -n "$output_files" ]; then
-        echo -e "${GREEN}[SUCCESS]${NC} OneFileLinux build completed successfully!"
+    # Current time in seconds since epoch
+    CURRENT_TIME=$(date +%s)
+    
+    # Check if the expected file exists and was created/modified recently (within 5 minutes)
+    if [ -n "$EXPECTED_EFI_FILE" ] && [ -f "$PROJECT_DIR/output/$EXPECTED_EFI_FILE" ]; then
+        # Get file modification time
+        FILE_MTIME=$(stat -c %Y "$PROJECT_DIR/output/$EXPECTED_EFI_FILE" 2>/dev/null || stat -f %m "$PROJECT_DIR/output/$EXPECTED_EFI_FILE")
+        # Calculate age in seconds
+        FILE_AGE=$((CURRENT_TIME - FILE_MTIME))
         
-        # Display each output file
-        echo -e "${BLUE}[INFO]${NC} Output files created:"
-        for efi_file in $output_files; do
-            FILE_SIZE=$(du -h "$efi_file" | cut -f1)
-            file_basename=$(basename "$efi_file")
-            echo -e "  - ${GREEN}$file_basename${NC} (Size: $FILE_SIZE)"
-        done
+        if [ "$FILE_AGE" -lt 300 ]; then  # 5 minutes
+            echo -e "${GREEN}[SUCCESS]${NC} OneFileLinux build completed successfully!"
+            echo -e "${BLUE}[INFO]${NC} Output files created:"
+            
+            # Display the expected file first
+            FILE_SIZE=$(du -h "$PROJECT_DIR/output/$EXPECTED_EFI_FILE" | cut -f1)
+            echo -e "  - ${GREEN}${EXPECTED_EFI_FILE}${NC} (Size: $FILE_SIZE) - Created $(printf "%d minutes %d seconds" $((FILE_AGE/60)) $((FILE_AGE%60))) ago"
+            
+            # List any other EFI files
+            for efi_file in $(find "$PROJECT_DIR/output" -name "*.efi" -not -name "$EXPECTED_EFI_FILE" | sort); do
+                FILE_SIZE=$(du -h "$efi_file" | cut -f1)
+                file_basename=$(basename "$efi_file")
+                echo -e "  - ${GREEN}$file_basename${NC} (Size: $FILE_SIZE)"
+            done
+        else
+            echo -e "${RED}[ERROR]${NC} Found expected EFI file ($EXPECTED_EFI_FILE) but it's too old (${FILE_AGE} seconds)."
+            echo -e "${RED}[ERROR]${NC} The build process likely failed to create a new EFI file."
+            # Check for any EFI files created/modified in the last 5 minutes
+            echo -e "${BLUE}[INFO]${NC} Checking for any recently created EFI files..."
+            # Find files less than 5 minutes old
+            RECENT_FILES=$(find "$PROJECT_DIR/output" -name "*.efi" -mmin -5 | sort)
+            if [ -n "$RECENT_FILES" ]; then
+                echo -e "${YELLOW}[WARNING]${NC} Found recent EFI files with different names:"
+                for recent_file in $RECENT_FILES; do
+                    FILE_SIZE=$(du -h "$recent_file" | cut -f1)
+                    file_basename=$(basename "$recent_file")
+                    echo -e "  - ${GREEN}$file_basename${NC} (Size: $FILE_SIZE)"
+                done
+                echo -e "${YELLOW}[WARNING]${NC} Profile name may have changed during build."
+                echo -e "${GREEN}[SUCCESS]${NC} Using alternative EFI file for build result."
+            else
+                echo -e "${RED}[ERROR]${NC} No recent EFI files found. Build failed."
+                exit 1
+            fi
+        fi
+    else
+        # Check for any EFI files created in the last 5 minutes
+        RECENT_FILES=$(find "$PROJECT_DIR/output" -name "*.efi" -mmin -5 | sort)
+        if [ -n "$RECENT_FILES" ]; then
+            echo -e "${GREEN}[SUCCESS]${NC} OneFileLinux build completed successfully!"
+            echo -e "${BLUE}[INFO]${NC} Output files created (from timestamp detection):"
+            for recent_file in $RECENT_FILES; do
+                FILE_SIZE=$(du -h "$recent_file" | cut -f1)
+                file_basename=$(basename "$recent_file")
+                echo -e "  - ${GREEN}$file_basename${NC} (Size: $FILE_SIZE)"
+            done
+        else
+            echo -e "${RED}[ERROR]${NC} No recent EFI files found in output directory."
+            
+            # List all EFI files in the output directory regardless of age
+            ALL_EFI_FILES=$(find "$PROJECT_DIR/output" -name "*.efi" | sort)
+            if [ -n "$ALL_EFI_FILES" ]; then
+                echo -e "${RED}[ERROR]${NC} Found old EFI files but none created recently. Build likely failed."
+                echo -e "${BLUE}[INFO]${NC} Existing EFI files in output directory:"
+                for efi_file in $ALL_EFI_FILES; do
+                    FILE_SIZE=$(du -h "$efi_file" | cut -f1)
+                    file_basename=$(basename "$efi_file")
+                    FILE_MTIME=$(stat -c %Y "$efi_file" 2>/dev/null || stat -f %m "$efi_file")
+                    FILE_AGE=$((CURRENT_TIME - FILE_MTIME))
+                    echo -e "  - ${YELLOW}$file_basename${NC} (Size: $FILE_SIZE, Age: $(printf "%d minutes %d seconds" $((FILE_AGE/60)) $((FILE_AGE%60))))"
+                done
+                echo -e "${RED}[ERROR]${NC} Build failed to create new EFI files."
+                exit 1
+            else
+                echo -e "${RED}[ERROR]${NC} No EFI files found at all."
+                exit 1
+            fi
+        fi
+    fi
         
         # Select the main file to display for backward compatibility messaging
         # Prioritize profile-specific files first, then fallback to generic name

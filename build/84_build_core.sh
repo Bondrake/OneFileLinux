@@ -364,13 +364,20 @@ create_efi() {
     # Determine the appropriate filename suffix based on build profile
     local profile_name="standard"
     
-    # If the get_build_profile_name function exists, use it to determine the profile
-    if type -t get_build_profile_name &>/dev/null; then
+    # Check for active build profile first, then fallback to detection
+    if type -t get_active_build_profile &>/dev/null; then
+        profile_name=$(get_active_build_profile)
+        log "INFO" "Using active build profile for EFI filename: $profile_name"
+    elif type -t get_build_profile_name &>/dev/null; then
         profile_name=$(get_build_profile_name)
+        log "INFO" "Detected build profile for EFI filename: $profile_name"
     fi
     
     # Create the EFI filename using the profile name
     local efi_file_name="OneFileLinux-${profile_name}.efi"
+    
+    # Export the expected EFI filename for other scripts to check
+    export EXPECTED_EFI_FILENAME="$efi_file_name"
     
     # Create EFI file
     log "INFO" "Creating ${efi_file_name}"

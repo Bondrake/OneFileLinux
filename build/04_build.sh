@@ -137,10 +137,25 @@ main() {
     log "SUCCESS" "Build completed successfully!"
     log "INFO" "Detailed timing log saved to: ${TIMING_LOG_FILE}"
     
-    if [ -f "$OUTPUT_DIR/OneFileLinux.efi" ]; then
-        local file_size=$(du -h "$OUTPUT_DIR/OneFileLinux.efi" | cut -f1)
-        log "SUCCESS" "Created OneFileLinux.efi (Size: $file_size)"
-        log "INFO" "EFI file: $OUTPUT_DIR/OneFileLinux.efi"
+    # First check for profile-specific EFI file
+    local efi_filename=""
+    
+    # Check if we have an expected EFI filename from create_efi function
+    if [ -n "${EXPECTED_EFI_FILENAME:-}" ]; then
+        efi_filename="$EXPECTED_EFI_FILENAME"
+    # Otherwise try to get active profile 
+    elif type -t get_active_build_profile &>/dev/null; then
+        local profile=$(get_active_build_profile)
+        efi_filename="OneFileLinux-${profile}.efi"
+    # Fall back to generic name if needed
+    else
+        efi_filename="OneFileLinux.efi"
+    fi
+    
+    if [ -f "$OUTPUT_DIR/$efi_filename" ]; then
+        local file_size=$(du -h "$OUTPUT_DIR/$efi_filename" | cut -f1)
+        log "SUCCESS" "Created $efi_filename (Size: $file_size)"
+        log "INFO" "EFI file: $OUTPUT_DIR/$efi_filename"
         
         # Show included features
         log "INFO" "Included features:"

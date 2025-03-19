@@ -245,6 +245,38 @@ setup_cache() {
     fi
 }
 
+# Add function to track the active build profile
+set_active_build_profile() {
+    local profile_name="$1"
+    export ACTIVE_BUILD_PROFILE="$profile_name"
+    
+    # Also write to a file for persistence across scripts
+    echo "$profile_name" > "${BUILD_DIR:-$(pwd)}/active_profile.txt"
+    log "INFO" "Set active build profile: $profile_name"
+}
+
+# Function to get the active build profile
+get_active_build_profile() {
+    # If environment variable is set, use it
+    if [ -n "${ACTIVE_BUILD_PROFILE:-}" ]; then
+        echo "$ACTIVE_BUILD_PROFILE"
+        return 0
+    fi
+    
+    # Otherwise, try to read from file
+    local profile_file="${BUILD_DIR:-$(pwd)}/active_profile.txt"
+    if [ -f "$profile_file" ]; then
+        ACTIVE_BUILD_PROFILE=$(cat "$profile_file")
+        export ACTIVE_BUILD_PROFILE
+        echo "$ACTIVE_BUILD_PROFILE"
+        return 0
+    fi
+    
+    # Default if no profile is set
+    echo "standard"
+    return 0
+}
+
 # Export all functions
 export -f load_config
 export -f save_config
@@ -252,3 +284,5 @@ export -f bool_to_str
 export -f print_config
 export -f generate_module_env
 export -f setup_cache
+export -f set_active_build_profile
+export -f get_active_build_profile
