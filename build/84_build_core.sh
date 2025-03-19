@@ -447,7 +447,8 @@ create_efi() {
                 if command -v upx &> /dev/null; then
                     # Apply UPX compression
                     log "INFO" "Compressing with UPX (faster decompression, good size reduction)..."
-                    if upx --best --lzma "$OUTPUT_DIR/${efi_file_name}"; then
+                    # Use --no-lzma and add --no-overlay options to avoid section wrap-around errors
+                    if upx --best --no-lzma --no-overlay "$OUTPUT_DIR/${efi_file_name}"; then
                         COMPRESSED_SIZE=$(du -h "$OUTPUT_DIR/${efi_file_name}" | cut -f1)
                         log "SUCCESS" "UPX compression successful"
                         log "INFO" "Original size: $original_size, Compressed size: $COMPRESSED_SIZE"
