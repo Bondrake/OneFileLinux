@@ -621,6 +621,14 @@ parse_build_args() {
     INCLUDE_COMPRESSION="${INCLUDE_COMPRESSION:-true}"
     COMPRESSION_TOOL="${COMPRESSION_TOOL:-upx}"
     
+    # If INCLUDE_MINIMAL_KERNEL is true but BUILD_TYPE isn't already minimal, set it
+    if [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ] && [ "${BUILD_TYPE:-}" != "minimal" ]; then
+        log "INFO" "INCLUDE_MINIMAL_KERNEL is true, setting BUILD_TYPE=minimal"
+        BUILD_TYPE="minimal"
+        # Also write this to a file for consistency
+        echo "export BUILD_TYPE=minimal" > "${BUILD_DIR:-$(pwd)}/build_type.env"
+    fi
+    
     # Build performance options
     USE_CACHE="${USE_CACHE:-false}"
     USE_SWAP="${USE_SWAP:-false}"
