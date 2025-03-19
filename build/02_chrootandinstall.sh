@@ -61,16 +61,9 @@ PACKAGES="openrc nano mc bash parted dropbear dropbear-ssh efibootmgr e2fsprogs 
 
 # Add ZFS support if enabled
 if [ "${INCLUDE_ZFS:-true}" = "true" ]; then
-    # Try to determine the correct ZFS package names for current Alpine version
-    ZFS_PACKAGES="zfs"
-    
-    # Add package variants - we'll handle failures during installation
+    # Add ZFS package - we'll handle failures during installation
     log "INFO" "Including ZFS runtime support using Alpine packages"
-    log "INFO" "Will try to install these ZFS packages: $ZFS_PACKAGES"
-    PACKAGES="$PACKAGES $ZFS_PACKAGES"
-    
-    # Debug output after adding packages
-    log "DEBUG" "Updated package list after adding ZFS: $PACKAGES"
+    PACKAGES="$PACKAGES zfs"
 fi
 
 # Add BTRFS support if enabled
@@ -197,9 +190,6 @@ apk update --cache-dir=/var/cache/apk
 # Start fresh with repositories to avoid duplicates
 echo "[INFO] Setting up clean repository configuration"
 
-# Backup the original repositories
-cp /etc/apk/repositories /etc/apk/repositories.orig
-
 # Create a clean repositories file
 cat > /etc/apk/repositories << EOF
 http://dl-cdn.alpinelinux.org/alpine/v3.21/main
@@ -207,52 +197,36 @@ http://dl-cdn.alpinelinux.org/alpine/v3.21/community
 http://dl-cdn.alpinelinux.org/alpine/edge/testing
 EOF
 
-echo "[INFO] Updated repositories:"
-cat /etc/apk/repositories
 apk update --cache-dir=/var/cache/apk
 
 echo "[INFO] Upgrading installed packages"
 echo "[DEBUG] Running: apk upgrade --cache-dir=/var/cache/apk"
-# Use -i (ignore) flag to continue despite package errors
-apk upgrade --cache-dir=/var/cache/apk -i || true
-echo "[DEBUG] Currently installed packages:"
-apk info --cache-dir=/var/cache/apk
+# Run upgrade without ignore flag to detect errors
+apk upgrade --cache-dir=/var/cache/apk
 
 echo "[INFO] Installing required packages"
 echo "[DEBUG] Package list: $PACKAGES"
 
-# Try installing packages with ignore flag to continue despite errors
-echo "[DEBUG] Running: apk add --cache-dir=/var/cache/apk -i --no-interactive $PACKAGES"
-apk add --cache-dir=/var/cache/apk -i --no-interactive $PACKAGES || true
+# Install packages with proper error detection
+echo "[DEBUG] Running: apk add --cache-dir=/var/cache/apk --no-interactive $PACKAGES"
+apk add --cache-dir=/var/cache/apk --no-interactive $PACKAGES
 
-echo "[INFO] Verifying core packages installed correctly"
+echo "[INFO] Verifying core packages installation"
 # Check status of core packages that are essential
 CORE_PACKAGES="bash openrc util-linux e2fsprogs efibootmgr"
 for pkg in $CORE_PACKAGES; do
     if ! apk info --cache-dir=/var/cache/apk -e "$pkg" >/dev/null 2>&1; then
-        echo "[ERROR] Essential package $pkg not installed properly"
-        echo "[DEBUG] Trying to install $pkg explicitly"
-        apk add --cache-dir=/var/cache/apk --no-interactive "$pkg" || echo "[ERROR] Failed to install $pkg"
-    else
-        echo "[INFO] ✓ Essential package $pkg installed"
+        echo "[ERROR] Essential package $pkg not installed"
     fi
 done
 
-# Check if we need to handle ZFS specially
+# Check ZFS package installation
 if [ "${INCLUDE_ZFS:-true}" = "true" ]; then
-    echo "[INFO] Checking ZFS package status"
-    # Identify the correct ZFS package name
+    echo "[INFO] Verifying ZFS package installation"
+    # Verify ZFS package was properly installed
     if ! apk info --cache-dir=/var/cache/apk -e "zfs" >/dev/null 2>&1; then
-        echo "[WARNING] ZFS package not installed, looking for alternatives"
-        # Try to find the right variant
-        if ZFS_PKG=$(apk search --cache-dir=/var/cache/apk "zfs" | grep -E "^zfs-" | head -n1); then
-            echo "[INFO] Found alternative ZFS package: $ZFS_PKG, attempting to install"
-            apk add --cache-dir=/var/cache/apk -i --no-interactive "$ZFS_PKG" || echo "[WARNING] Failed to install $ZFS_PKG"
-        else
-            echo "[WARNING] No suitable ZFS package found, continuing without ZFS support"
-        fi
-    else
-        echo "[INFO] ✓ ZFS package installed"
+        # Report error but don't attempt recovery
+        echo "[ERROR] ZFS package not installed. Check repository configuration."
     fi
 fi
 
