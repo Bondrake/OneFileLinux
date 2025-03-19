@@ -385,6 +385,9 @@ create_efi() {
         log "INFO" "Detected build profile for EFI filename: $profile_name"
     fi
     
+    # Debug: Print current value of BUILD_TYPE
+    log "INFO" "Current BUILD_TYPE value: ${BUILD_TYPE:-not set}"
+    
     # Override profile name if BUILD_TYPE is set to minimal but profile doesn't match
     if [ "${BUILD_TYPE:-}" = "minimal" ] && [ "$profile_name" != "minimal" ]; then
         log "INFO" "BUILD_TYPE is minimal but profile name is $profile_name, correcting to minimal"
