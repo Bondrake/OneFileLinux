@@ -399,57 +399,32 @@ else
             fi
         fi
     fi
-        
-        # Select the main file to display for backward compatibility messaging
-        # Prioritize profile-specific files first, then fallback to generic name
-        if echo "$output_files" | grep -q "custom"; then
-            MAIN_FILE=$(echo "$output_files" | grep "custom" | head -1)
-        elif echo "$output_files" | grep -q "standard"; then
-            MAIN_FILE=$(echo "$output_files" | grep "standard" | head -1)
-        elif echo "$output_files" | grep -q "minimal"; then
-            MAIN_FILE=$(echo "$output_files" | grep "minimal" | head -1)
-        elif echo "$output_files" | grep -q "full"; then
-            MAIN_FILE=$(echo "$output_files" | grep "full" | head -1)
+    
+    # If we got here, we have some valid EFI files
+    # Find the best file to display for log information
+    MAIN_FILE=""
+    
+    # Get the most recently created EFI file
+    RECENT_FILES=$(find "$PROJECT_DIR/output" -name "*.efi" -mmin -5 2>/dev/null | sort)
+    if [ -n "$RECENT_FILES" ]; then
+        # Use the expected file if it exists and is recent
+        if [ -n "$EXPECTED_EFI_FILE" ] && [ -f "$PROJECT_DIR/output/$EXPECTED_EFI_FILE" ]; then
+            MAIN_FILE="$PROJECT_DIR/output/$EXPECTED_EFI_FILE"
         else
-            # Fallback to first file (likely OneFileLinux.efi)
-            MAIN_FILE=$(echo "$output_files" | head -1)
+            # Otherwise use the first recent file
+            MAIN_FILE=$(echo "$RECENT_FILES" | head -1)
         fi
-        
-        echo -e "${BLUE}[INFO]${NC} Primary output file: $MAIN_FILE"
-        
-        # Display build timing information if available
-        TIMING_LOG="$PROJECT_DIR/build/build_timing.log"
-        if [ -f "$TIMING_LOG" ]; then
-            echo -e "${BLUE}[INFO]${NC} Build timing information:"
-            echo "=============================================================="
-            cat "$TIMING_LOG"
-            echo "=============================================================="
-            echo -e "${BLUE}[INFO]${NC} Full timing log saved to: $TIMING_LOG"
-        fi
-    else
-        # No EFI files found - check for errors
-        
-        # Check if compose itself failed 
-        if [ $COMPOSE_EXIT_CODE -ne 0 ]; then
-            echo -e "${RED}[ERROR]${NC} Docker Compose execution failed with exit code $COMPOSE_EXIT_CODE."
-            echo -e "${RED}[ERROR]${NC} OneFileLinux build failed. See container logs for details."
-            exit 1
-        else
-            # Compose succeeded but no output file - container likely exited with error
-            echo -e "${RED}[ERROR]${NC} Build process failed. Container exited without creating any EFI files."
-            echo -e "${YELLOW}[WARNING]${NC} Check container logs for details."
-            
-            # Check what files were actually created in the output directory
-            echo -e "${BLUE}[INFO]${NC} Files in output directory:"
-            ls -la "$PROJECT_DIR/output/"
-            
-            # Look for build errors in container logs
-            if $COMPOSE_CMD logs | grep -i "error\|fail\|fatal" > /dev/null; then
-                echo -e "${YELLOW}[WARNING]${NC} Found error messages in container logs:"
-                $COMPOSE_CMD logs | grep -i "error\|fail\|fatal" | tail -n 10
-            fi
-            exit 1
-        fi
+        echo -e "${BLUE}[INFO]${NC} Primary output file: $(basename "$MAIN_FILE")"
+    fi
+    
+    # Display build timing information if available
+    TIMING_LOG="$PROJECT_DIR/build/build_timing.log"
+    if [ -f "$TIMING_LOG" ]; then
+        echo -e "${BLUE}[INFO]${NC} Build timing information:"
+        echo "=============================================================="
+        cat "$TIMING_LOG"
+        echo "=============================================================="
+        echo -e "${BLUE}[INFO]${NC} Full timing log saved to: $TIMING_LOG"
     fi
 fi
 
