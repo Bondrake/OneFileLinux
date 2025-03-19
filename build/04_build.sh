@@ -25,6 +25,13 @@ source_libraries "${SCRIPT_DIR}"
 # The build core library is now loaded via source_libraries
 # No need for separate loading of 84_build_core.sh here
 
+# Check for build_type.env file and source it if it exists (Docker compatibility)
+if [ -f "${SCRIPT_DIR}/build_type.env" ]; then
+    echo "Found build_type.env, sourcing it to ensure BUILD_TYPE is set correctly"
+    source "${SCRIPT_DIR}/build_type.env"
+    echo "BUILD_TYPE is now set to: ${BUILD_TYPE:-standard}"
+fi
+
 # Initialize script with standard header (prints banner)
 initialize_script
 

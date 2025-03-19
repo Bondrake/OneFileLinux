@@ -294,6 +294,8 @@ run_build() {
             if [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ]; then
                 echo "Setting BUILD_TYPE=minimal based on --minimal flag detection"
                 export BUILD_TYPE="minimal"
+                # Write to a special file to ensure it persists across script boundaries
+                echo "export BUILD_TYPE=minimal" > "$BUILD_DIR/build_type.env"
                 
                 # Set active build profile if the function is available
                 if type -t set_active_build_profile &>/dev/null; then
