@@ -291,8 +291,20 @@ build_kernel() {
     
     # Install modules
     log "INFO" "Installing kernel modules"
-    log "INFO" "Make modules_install command: make $make_v INSTALL_MOD_PATH=\"$ROOTFS_DIR\" modules_install"
-    INSTALL_MOD_PATH="$ROOTFS_DIR" make modules_install
+    log "INFO" "Make modules_install command: make $make_v INSTALL_MOD_PATH=\"$ROOTFS_DIR\" modules_install -j$threads"
+    INSTALL_MOD_PATH="$ROOTFS_DIR" make $make_v modules_install -j$threads 2>&1 | tee module_install.log || {
+        log "ERROR" "Module installation failed"
+        
+        # Check log for common errors
+        if grep -q "No space left on device" module_install.log; then
+            log "ERROR" "Module installation failed due to insufficient disk space!"
+        elif grep -q "Permission denied" module_install.log; then
+            log "ERROR" "Module installation failed due to permission issues!"
+        fi
+        
+        return 1
+    }
+    rm -f module_install.log
     
     log "SUCCESS" "Kernel and modules built successfully"
     
