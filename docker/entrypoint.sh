@@ -289,6 +289,22 @@ run_build() {
             source "./82_build_helper.sh"
             echo "Parsing build flags from arguments: $BUILD_ARGS"
             parse_build_flags "$BUILD_ARGS" true
+            
+            # If --minimal flag was detected, also set BUILD_TYPE for 04_build.sh compatibility
+            if [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ]; then
+                echo "Setting BUILD_TYPE=minimal based on --minimal flag detection"
+                export BUILD_TYPE="minimal"
+                
+                # Set active build profile if the function is available
+                if type -t set_active_build_profile &>/dev/null; then
+                    echo "Setting active build profile to 'minimal'"
+                    set_active_build_profile "minimal"
+                else
+                    # Create active_profile.txt directly
+                    echo "minimal" > active_profile.txt
+                    echo "Created active_profile.txt with 'minimal' profile"
+                fi
+            fi
 
             # Log the configuration that will be used
             echo "Using build configuration:"
