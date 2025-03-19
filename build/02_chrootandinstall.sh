@@ -194,74 +194,66 @@ touch /var/cache/apk/APKCACHE.init
 echo "[INFO] Updating package lists"
 apk update --cache-dir=/var/cache/apk
 
-# Enable community and testing repositories for additional packages
-# First check current repositories to avoid duplicates
-echo "[INFO] Current repositories:"
-cat /etc/apk/repositories
+# Start fresh with repositories to avoid duplicates
+echo "[INFO] Setting up clean repository configuration"
 
-# Add repositories if they don't already exist
-if ! grep -q "v3.21/community" /etc/apk/repositories; then
-    echo "http://dl-cdn.alpinelinux.org/alpine/v3.21/community" >> /etc/apk/repositories
-fi
-if ! grep -q "v3.21/main" /etc/apk/repositories; then
-    echo "http://dl-cdn.alpinelinux.org/alpine/v3.21/main" >> /etc/apk/repositories
-fi
-if ! grep -q "edge/testing" /etc/apk/repositories; then
-    echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
-fi
+# Backup the original repositories
+cp /etc/apk/repositories /etc/apk/repositories.orig
+
+# Create a clean repositories file
+cat > /etc/apk/repositories << EOF
+http://dl-cdn.alpinelinux.org/alpine/v3.21/main
+http://dl-cdn.alpinelinux.org/alpine/v3.21/community
+http://dl-cdn.alpinelinux.org/alpine/edge/testing
+EOF
 
 echo "[INFO] Updated repositories:"
 cat /etc/apk/repositories
 apk update --cache-dir=/var/cache/apk
 
 echo "[INFO] Upgrading installed packages"
-echo "[DEBUG] Running: apk upgrade --available --cache-dir=/var/cache/apk"
-if ! apk upgrade --available --cache-dir=/var/cache/apk; then
-    echo "[WARNING] Package upgrade had errors, but continuing anyway"
-    # Show what's installed
-    echo "[DEBUG] Currently installed packages:"
-    apk info --cache-dir=/var/cache/apk
-fi
+echo "[DEBUG] Running: apk upgrade --cache-dir=/var/cache/apk"
+# Use -i (ignore) flag to continue despite package errors
+apk upgrade --cache-dir=/var/cache/apk -i || true
+echo "[DEBUG] Currently installed packages:"
+apk info --cache-dir=/var/cache/apk
 
 echo "[INFO] Installing required packages"
 echo "[DEBUG] Package list: $PACKAGES"
 
-# Try installing packages with verbose output
-echo "[DEBUG] Running: apk add --cache-dir=/var/cache/apk $PACKAGES"
-if ! apk add --cache-dir=/var/cache/apk $PACKAGES; then
-    echo "[ERROR] Failed to install some packages - checking which ones are problematic"
-    
-    # Convert space-separated string to array for safer iteration
-    read -ra PACKAGE_ARRAY <<< "$PACKAGES"
-    
-    # Try to install packages one by one to identify problematic ones
-    for pkg in "${PACKAGE_ARRAY[@]}"; do
-        if [ -z "$pkg" ]; then
-            echo "[DEBUG] Skipping empty package name"
-            continue
-        fi
-        
-        echo "[DEBUG] Trying to install package: $pkg"
-        if ! apk add --cache-dir=/var/cache/apk "$pkg"; then
-            echo "[ERROR] Problem package: $pkg is not available or has dependency issues"
-            # Try to see if it exists in the repository but has dependency issues
-            if apk search --cache-dir=/var/cache/apk -e "^$pkg$" | grep -q "$pkg"; then
-                echo "[DEBUG] Package $pkg exists in the repository, likely a dependency issue"
-                # Show dependencies
-                apk info --cache-dir=/var/cache/apk -R "$pkg"
-            else
-                echo "[DEBUG] Package $pkg not found in configured repositories"
-                # Show available similar packages
-                echo "[DEBUG] Similar packages available:"
-                apk search --cache-dir=/var/cache/apk "$pkg"
-            fi
+# Try installing packages with ignore flag to continue despite errors
+echo "[DEBUG] Running: apk add --cache-dir=/var/cache/apk -i $PACKAGES"
+apk add --cache-dir=/var/cache/apk -i $PACKAGES || true
+
+echo "[INFO] Verifying core packages installed correctly"
+# Check status of core packages that are essential
+CORE_PACKAGES="bash openrc util-linux e2fsprogs efibootmgr"
+for pkg in $CORE_PACKAGES; do
+    if ! apk info --cache-dir=/var/cache/apk -e "$pkg" >/dev/null 2>&1; then
+        echo "[ERROR] Essential package $pkg not installed properly"
+        echo "[DEBUG] Trying to install $pkg explicitly"
+        apk add --cache-dir=/var/cache/apk "$pkg" || echo "[ERROR] Failed to install $pkg"
+    else
+        echo "[INFO] ✓ Essential package $pkg installed"
+    fi
+done
+
+# Check if we need to handle ZFS specially
+if [ "${INCLUDE_ZFS:-true}" = "true" ]; then
+    echo "[INFO] Checking ZFS package status"
+    # Identify the correct ZFS package name
+    if ! apk info --cache-dir=/var/cache/apk -e "zfs" >/dev/null 2>&1; then
+        echo "[WARNING] ZFS package not installed, looking for alternatives"
+        # Try to find the right variant
+        if ZFS_PKG=$(apk search --cache-dir=/var/cache/apk "zfs" | grep -E "^zfs-" | head -n1); then
+            echo "[INFO] Found alternative ZFS package: $ZFS_PKG, attempting to install"
+            apk add --cache-dir=/var/cache/apk -i "$ZFS_PKG" || echo "[WARNING] Failed to install $ZFS_PKG"
         else
-            echo "[INFO] Successfully installed package: $pkg"
+            echo "[WARNING] No suitable ZFS package found, continuing without ZFS support"
         fi
-    done
-    
-    # Continue anyway for now, to aid debugging
-    echo "[WARNING] Some packages failed to install, but continuing for debugging purposes"
+    else
+        echo "[INFO] ✓ ZFS package installed"
+    fi
 fi
 
 echo "[INFO] Cleaning package cache"
