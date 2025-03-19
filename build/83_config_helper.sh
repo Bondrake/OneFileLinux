@@ -257,34 +257,35 @@ set_active_build_profile() {
 
 # Function to get the active build profile
 get_active_build_profile() {
-    # First, check if BUILD_TYPE is set to minimal explicitly
+    # Check in priority order, using the first available source:
+    
+    # 1. Check explicit BUILD_TYPE environment variable (for backward compatibility)
     if [ "${BUILD_TYPE:-}" = "minimal" ]; then
-        log "INFO" "BUILD_TYPE=minimal detected, using 'minimal' profile"
+        log "DEBUG" "Using 'minimal' profile from BUILD_TYPE environment variable"
         export ACTIVE_BUILD_PROFILE="minimal"
         echo "minimal"
         return 0
     fi
 
-    # Next, if environment variable is set, use it
+    # 2. Check ACTIVE_BUILD_PROFILE environment variable
     if [ -n "${ACTIVE_BUILD_PROFILE:-}" ]; then
-        log "INFO" "Using active profile from environment: $ACTIVE_BUILD_PROFILE"
+        log "DEBUG" "Using profile from ACTIVE_BUILD_PROFILE: $ACTIVE_BUILD_PROFILE"
         echo "$ACTIVE_BUILD_PROFILE"
         return 0
     fi
     
-    # Otherwise, try to read from file
+    # 3. Check active_profile.txt file
     local profile_file="${BUILD_DIR:-$(pwd)}/active_profile.txt"
-    log "INFO" "Checking for active profile file: $profile_file"
     if [ -f "$profile_file" ]; then
         ACTIVE_BUILD_PROFILE=$(cat "$profile_file")
         export ACTIVE_BUILD_PROFILE
-        log "INFO" "Read active profile from file: $ACTIVE_BUILD_PROFILE"
+        log "DEBUG" "Using profile from file: $ACTIVE_BUILD_PROFILE"
         echo "$ACTIVE_BUILD_PROFILE"
         return 0
     fi
     
-    # Default if no profile is set
-    log "INFO" "No active profile found, defaulting to standard"
+    # 4. Default to standard if no profile is set
+    log "DEBUG" "No active profile found, defaulting to standard"
     echo "standard"
     return 0
 }

@@ -376,26 +376,14 @@ create_efi() {
     # Determine the appropriate filename suffix based on build profile
     local profile_name="standard"
     
-    # Check for active build profile first, then fallback to detection
+    # Get the active build profile using the official API
     if type -t get_active_build_profile &>/dev/null; then
         profile_name=$(get_active_build_profile)
         log "INFO" "Using active build profile for EFI filename: $profile_name"
     elif type -t get_build_profile_name &>/dev/null; then
+        # Fallback to detection if the function is available
         profile_name=$(get_build_profile_name)
         log "INFO" "Detected build profile for EFI filename: $profile_name"
-    fi
-    
-    # Debug: Print current value of BUILD_TYPE
-    log "INFO" "Current BUILD_TYPE value: ${BUILD_TYPE:-not set}"
-    
-    # Override profile name if BUILD_TYPE is set to minimal but profile doesn't match
-    if [ "${BUILD_TYPE:-}" = "minimal" ] && [ "$profile_name" != "minimal" ]; then
-        log "INFO" "BUILD_TYPE is minimal but profile name is $profile_name, correcting to minimal"
-        profile_name="minimal"
-        # Also update the active build profile if the function exists
-        if type -t set_active_build_profile &>/dev/null; then
-            set_active_build_profile "$profile_name"
-        fi
     fi
     
     # Create the EFI filename using the profile name
@@ -628,8 +616,11 @@ parse_build_args() {
     if [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ] && [ "${BUILD_TYPE:-}" != "minimal" ]; then
         log "INFO" "INCLUDE_MINIMAL_KERNEL is true, setting BUILD_TYPE=minimal"
         BUILD_TYPE="minimal"
-        # Also write this to a file for consistency
-        echo "export BUILD_TYPE=minimal" > "${BUILD_DIR:-$(pwd)}/build_type.env"
+        
+        # Use canonical profile management API if available
+        if type -t set_active_build_profile &>/dev/null; then
+            set_active_build_profile "minimal"
+        fi
     fi
     
     # Build performance options

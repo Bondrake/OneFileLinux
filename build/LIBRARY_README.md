@@ -79,6 +79,49 @@ Options:
    - Update configuration handling in `83_config_helper.sh`
    - Ensure the feature can be toggled consistently across all build paths
 
+## Build Profiles System
+
+OneFileLinux supports multiple build profiles (minimal, standard, full) that control which features are included in the final EFI file.
+
+### Official Profile Management API
+
+The proper way to work with build profiles is through these functions in `83_config_helper.sh`:
+
+1. `set_active_build_profile <profile_name>` - Sets the active profile and persists it
+2. `get_active_build_profile` - Retrieves the current active profile
+
+### Profile Determination Flow
+
+Profiles are determined in the following order of precedence:
+
+1. `BUILD_TYPE` environment variable (if set to "minimal") - For backward compatibility
+2. `ACTIVE_BUILD_PROFILE` environment variable
+3. `active_profile.txt` file in the build directory
+4. Default to "standard" if no profile is specified
+
+### Creating Custom Build Profiles
+
+Custom build profiles can be defined in `86_build_profiles.sh` by adding a new entry to the `BUILD_PROFILES` associative array.
+
+### Environment Variables Controlled by Profiles
+
+Each profile sets multiple environment variables that control which features are included:
+
+- `INCLUDE_ZFS` - ZFS filesystem support
+- `INCLUDE_BTRFS` - Btrfs filesystem support
+- `INCLUDE_MINIMAL_KERNEL` - Use minimal kernel configuration
+- `INCLUDE_RECOVERY_TOOLS` - Include data recovery tools
+- `INCLUDE_NETWORK_TOOLS` - Include network tools
+- `INCLUDE_CRYPTO` - Include encryption support
+- `INCLUDE_TUI` - Include Text User Interface
+- And more...
+
+### Docker Integration
+
+When running in Docker with `docker/build-onefilelinux.sh`, the `--minimal` flag sets:
+1. `INCLUDE_MINIMAL_KERNEL=true` 
+2. The active build profile to "minimal" via the profile management API
+
 ## Troubleshooting
 
 Common issues and solutions:

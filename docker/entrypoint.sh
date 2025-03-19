@@ -292,19 +292,16 @@ run_build() {
             
             # If --minimal flag was detected, also set BUILD_TYPE for 04_build.sh compatibility
             if [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ]; then
-                echo "Setting BUILD_TYPE=minimal based on --minimal flag detection"
+                echo "Setting active profile to 'minimal' based on --minimal flag detection"
                 export BUILD_TYPE="minimal"
-                # Write to a special file to ensure it persists across script boundaries
-                echo "export BUILD_TYPE=minimal" > "$BUILD_DIR/build_type.env"
                 
-                # Set active build profile if the function is available
-                if type -t set_active_build_profile &>/dev/null; then
-                    echo "Setting active build profile to 'minimal'"
+                # Source the config_helper to get access to profile management functions
+                if [ -f "$BUILD_DIR/83_config_helper.sh" ]; then
+                    source "$BUILD_DIR/83_config_helper.sh"
                     set_active_build_profile "minimal"
                 else
-                    # Create active_profile.txt directly with absolute path
+                    echo "WARNING: Could not find 83_config_helper.sh, using fallback method"
                     echo "minimal" > "$BUILD_DIR/active_profile.txt"
-                    echo "Created $BUILD_DIR/active_profile.txt with 'minimal' profile"
                 fi
             fi
 
