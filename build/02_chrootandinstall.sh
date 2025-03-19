@@ -56,9 +56,8 @@ EOF
 # Create installation script
 log "INFO" "Creating installation script"
 # Determine which packages to install based on module configuration
-PACKAGES="openrc nano mc bash parted dropbear dropbear-ssh efibootmgr \
-    e2fsprogs e2fsprogs-extra dosfstools \
-    dmraid fuse gawk grep sed util-linux wget"
+# Define base packages without line continuations to avoid parsing issues
+PACKAGES="openrc nano mc bash parted dropbear dropbear-ssh efibootmgr e2fsprogs e2fsprogs-extra dosfstools dmraid fuse gawk grep sed util-linux wget"
 
 # Add ZFS support if enabled
 if [ "${INCLUDE_ZFS:-true}" = "true" ]; then
@@ -69,6 +68,9 @@ if [ "${INCLUDE_ZFS:-true}" = "true" ]; then
     log "INFO" "Including ZFS runtime support using Alpine packages"
     log "INFO" "Will try to install these ZFS packages: $ZFS_PACKAGES"
     PACKAGES="$PACKAGES $ZFS_PACKAGES"
+    
+    # Debug output after adding packages
+    log "DEBUG" "Updated package list after adding ZFS: $PACKAGES"
 fi
 
 # Add BTRFS support if enabled
@@ -222,20 +224,32 @@ echo "[DEBUG] Package list: $PACKAGES"
 
 # Try installing packages with verbose output
 echo "[DEBUG] Running: apk add --no-cache $PACKAGES"
-if ! apk add --no-cache --verbose $PACKAGES; then
+if ! apk add --no-cache $PACKAGES; then
     echo "[ERROR] Failed to install some packages - checking which ones are problematic"
+    
+    # Convert space-separated string to array for safer iteration
+    read -ra PACKAGE_ARRAY <<< "$PACKAGES"
+    
     # Try to install packages one by one to identify problematic ones
-    for pkg in $PACKAGES; do
+    for pkg in "${PACKAGE_ARRAY[@]}"; do
+        if [ -z "$pkg" ]; then
+            echo "[DEBUG] Skipping empty package name"
+            continue
+        fi
+        
         echo "[DEBUG] Trying to install package: $pkg"
-        if ! apk add --no-cache $pkg; then
+        if ! apk add --no-cache "$pkg"; then
             echo "[ERROR] Problem package: $pkg is not available or has dependency issues"
             # Try to see if it exists in the repository but has dependency issues
             if apk search -e "^$pkg$" | grep -q "$pkg"; then
                 echo "[DEBUG] Package $pkg exists in the repository, likely a dependency issue"
                 # Show dependencies
-                apk info -R $pkg
+                apk info -R "$pkg"
             else
                 echo "[DEBUG] Package $pkg not found in configured repositories"
+                # Show available similar packages
+                echo "[DEBUG] Similar packages available:"
+                apk search "$pkg"
             fi
         else
             echo "[INFO] Successfully installed package: $pkg"
