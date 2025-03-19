@@ -23,7 +23,7 @@ TERM_HEIGHT=$(tput lines)
 VERSION="1.1.0"
 
 # Log file
-LOG_FILE="/tmp/onerecovery.log"
+LOG_FILE="/tmp/onefilelinux.log"
 touch "$LOG_FILE"
 
 # Function to center text

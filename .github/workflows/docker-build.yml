@@ -151,19 +151,19 @@ jobs:
           RUN_AS_ROOT=true
           RUN_AS_USER=root
           
-          # Use default password 'onerecovery' instead of generating a random one
+          # Use default password 'onefilelinux' instead of generating a random one
           GENERATE_RANDOM_PASSWORD=false
-          ROOT_PASSWORD=onerecovery
+          ROOT_PASSWORD=onefilelinux
           
           # Debug settings
           DEBUG_FEATURE_FLAGS=true
           EOF
           
           # Also prepare build directory for Docker entrypoint
-          mkdir -p build/.onerecovery
-          touch build/.onerecovery/host_uid_gid
-          echo "$(id -u):$(id -g)" > build/.onerecovery/host_uid_gid
-          chmod 666 build/.onerecovery/host_uid_gid
+          mkdir -p build/.onefilelinux
+          touch build/.onefilelinux/host_uid_gid
+          echo "$(id -u):$(id -g)" > build/.onefilelinux/host_uid_gid
+          chmod 666 build/.onefilelinux/host_uid_gid
 
           # Create ccache directory with proper permissions
           mkdir -p ~/.ccache
@@ -178,7 +178,7 @@ jobs:
         env:
           BUILD_ARGS: ${{ matrix.build_args }}
           GENERATE_RANDOM_PASSWORD: "false"
-          ROOT_PASSWORD: "onerecovery"
+          ROOT_PASSWORD: "onefilelinux"
         run: |
           cd docker
 

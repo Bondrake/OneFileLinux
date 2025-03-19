@@ -11,10 +11,10 @@ for script in /etc/profile.d/*.sh ; do
 done
 
 # Launch OneFileLinux TUI if it exists and auto-start is enabled
-if [ -x /onerecovery-tui ] && [ "$ONERECOVERY_TUI_AUTOSTART" = "1" ]; then
+if [ -x /onefilelinux-tui ] && [ "$ONEFILELINUX_TUI_AUTOSTART" = "1" ]; then
     # Only run on the first login (TTY1)
     if [ "$(tty)" = "/dev/tty1" ]; then
         echo "Starting OneFileLinux TUI..."
-        /onerecovery-tui
+        /onefilelinux-tui
     fi
 fi

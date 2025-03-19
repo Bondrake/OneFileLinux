@@ -2,7 +2,7 @@
 
 export INITRAMFS=1
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
-export ONERECOVERY_TUI_AUTOSTART=1
+export ONEFILELINUX_TUI_AUTOSTART=1
 
 # Initialize system
 exec /sbin/init
