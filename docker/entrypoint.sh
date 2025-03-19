@@ -290,19 +290,28 @@ run_build() {
             echo "Parsing build flags from arguments: $BUILD_ARGS"
             parse_build_flags "$BUILD_ARGS" true
             
-            # If --minimal flag was detected, also set BUILD_TYPE for 04_build.sh compatibility
+            # Determine the appropriate build profile based on flags
             if [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ]; then
                 echo "Setting active profile to 'minimal' based on --minimal flag detection"
                 export BUILD_TYPE="minimal"
-                
-                # Source the config_helper to get access to profile management functions
-                if [ -f "$BUILD_DIR/83_config_helper.sh" ]; then
-                    source "$BUILD_DIR/83_config_helper.sh"
-                    set_active_build_profile "minimal"
-                else
-                    echo "WARNING: Could not find 83_config_helper.sh, using fallback method"
-                    echo "minimal" > "$BUILD_DIR/active_profile.txt"
-                fi
+                profile="minimal"
+            elif [ "${INCLUDE_BTRFS:-false}" = "true" ] && [ "${INCLUDE_ZFS:-true}" = "true" ]; then
+                echo "Setting active profile to 'full' based on feature flags"
+                export BUILD_TYPE="full"
+                profile="full"
+            else
+                echo "Using 'standard' profile as default"
+                export BUILD_TYPE="standard"
+                profile="standard"
+            fi
+            
+            # Source the config_helper to get access to profile management functions
+            if [ -f "$BUILD_DIR/83_config_helper.sh" ]; then
+                source "$BUILD_DIR/83_config_helper.sh"
+                set_active_build_profile "$profile"
+            else
+                echo "WARNING: Could not find 83_config_helper.sh, using fallback method"
+                echo "$profile" > "$BUILD_DIR/active_profile.txt"
             fi
 
             # Log the configuration that will be used

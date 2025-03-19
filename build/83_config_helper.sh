@@ -92,8 +92,11 @@ print_config() {
     log "INFO" "Current build configuration:"
     
     # Build type
+    # Determine profile based on common patterns
     if [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ]; then
         log "INFO" "  Build type: ${YELLOW}Minimal${NC} (optimized for size)"
+    elif [ "${INCLUDE_BTRFS:-false}" = "true" ] && [ "${INCLUDE_ZFS:-true}" = "true" ]; then
+        log "INFO" "  Build type: ${BLUE}Full${NC} (all features included)"
     else
         log "INFO" "  Build type: ${GREEN}Standard${NC}"
     fi
@@ -260,11 +263,16 @@ get_active_build_profile() {
     # Check in priority order, using the first available source:
     
     # 1. Check explicit BUILD_TYPE environment variable (for backward compatibility)
-    if [ "${BUILD_TYPE:-}" = "minimal" ]; then
-        log "DEBUG" "Using 'minimal' profile from BUILD_TYPE environment variable"
-        export ACTIVE_BUILD_PROFILE="minimal"
-        echo "minimal"
-        return 0
+    if [ -n "${BUILD_TYPE:-}" ]; then
+        # Check if it's a valid profile (minimal, standard, full)
+        case "${BUILD_TYPE}" in
+            minimal|standard|full)
+                log "DEBUG" "Using '${BUILD_TYPE}' profile from BUILD_TYPE environment variable"
+                export ACTIVE_BUILD_PROFILE="${BUILD_TYPE}"
+                echo "${BUILD_TYPE}"
+                return 0
+                ;;
+        esac
     fi
 
     # 2. Check ACTIVE_BUILD_PROFILE environment variable
