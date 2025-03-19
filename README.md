@@ -36,7 +36,7 @@ OneFileLinux provides a powerful system recovery solution with unique advantages
 - **Data Recovery**: Specialized tools for rescuing data from failed systems
 - **Boot Repair**: Tools to fix common boot problems across operating systems
 - **Text UI**: Full-featured text-based user interface for easy navigation
-- **Ultra Size Optimized**: Minimal builds around 4MB, standard builds around 20MB
+- **Ultra Size Optimized**: Minimal builds around 7.5MB, standard builds around 50MB
 
 ## Getting Started
 
@@ -86,9 +86,9 @@ OneFileLinux offers several build configurations to balance features and size:
 
 | Build Type | Description | Size | Command |
 |------------|-------------|------|---------|
-| Minimal | Core functionality only | ~4MB | `--minimal` |
-| Standard | Basic recovery features | ~20MB | (default) |
-| Full | All features and tools | ~40-60MB | `--full` |
+| Minimal | Core functionality only | ~7.5MB | `--minimal` |
+| Standard | Basic recovery features | ~50MB | (default) |
+| Full | All features and tools | ~70-90MB | `--full` |
 
 ### Advanced Package Groups
 
@@ -127,10 +127,10 @@ For detailed installation instructions for macOS, Windows, and creating bootable
 When planning to use OneFileLinux, keep in mind these EFI partition size guidelines:
 
 - **Minimal build**: 100MB EFI partition is sufficient
-- **Standard build**: 150MB EFI partition recommended
-- **Full build**: 260MB EFI partition recommended
+- **Standard build**: 100MB EFI partition is typically sufficient
+- **Full build**: 300MB EFI partition recommended
 
-Most modern systems have EFI partitions ranging from 100MB to 260MB.
+Most modern systems have EFI partitions ranging from 100MB to 300MB.
 
 ## Documentation
 
