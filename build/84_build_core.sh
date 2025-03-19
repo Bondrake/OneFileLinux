@@ -621,6 +621,8 @@ parse_build_args() {
                 INCLUDE_CRYPTO=false
                 INCLUDE_TUI=false
                 INCLUDE_MINIMAL_KERNEL=true
+                # Set the active profile explicitly
+                set_active_build_profile "minimal"
                 shift
                 ;;
             --full)
@@ -632,6 +634,8 @@ parse_build_args() {
                 INCLUDE_CRYPTO=true
                 INCLUDE_TUI=true
                 INCLUDE_MINIMAL_KERNEL=false
+                # Set the active profile explicitly
+                set_active_build_profile "full"
                 shift
                 ;;
             --minimal-kernel)
