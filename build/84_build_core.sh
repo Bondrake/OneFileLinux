@@ -601,8 +601,14 @@ EOF
 
 # Process build arguments
 parse_build_args() {
-    # Default settings
-    BUILD_TYPE="standard"
+    # Check if BUILD_TYPE is already set from environment
+    # If it's set (especially by Docker entrypoint), respect it
+    if [ -z "${BUILD_TYPE:-}" ]; then
+        # Default settings if not already set
+        BUILD_TYPE="standard"
+    else
+        log "INFO" "Using BUILD_TYPE from environment: $BUILD_TYPE"
+    fi
     
     # Optional components
     INCLUDE_MINIMAL_KERNEL="${INCLUDE_MINIMAL_KERNEL:-false}"
