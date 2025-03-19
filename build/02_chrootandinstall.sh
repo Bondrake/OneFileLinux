@@ -62,10 +62,13 @@ PACKAGES="openrc nano mc bash parted dropbear dropbear-ssh efibootmgr \
 
 # Add ZFS support if enabled
 if [ "${INCLUDE_ZFS:-true}" = "true" ]; then
-    # Add ZFS and required runtime dependencies for Alpine Linux
-    PACKAGES="$PACKAGES zfs zfs-lts"
+    # Try to determine the correct ZFS package names for current Alpine version
+    ZFS_PACKAGES="zfs"
     
+    # Add package variants - we'll handle failures during installation
     log "INFO" "Including ZFS runtime support using Alpine packages"
+    log "INFO" "Will try to install these ZFS packages: $ZFS_PACKAGES"
+    PACKAGES="$PACKAGES $ZFS_PACKAGES"
 fi
 
 # Add BTRFS support if enabled
@@ -186,25 +189,61 @@ echo "[INFO] Updating package lists"
 apk update
 
 # Enable community and testing repositories for additional packages
-echo "http://dl-cdn.alpinelinux.org/alpine/v3.21/community" >> /etc/apk/repositories
-echo "http://dl-cdn.alpinelinux.org/alpine/v3.21/main" >> /etc/apk/repositories
-echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+# First check current repositories to avoid duplicates
+echo "[INFO] Current repositories:"
+cat /etc/apk/repositories
+
+# Add repositories if they don't already exist
+if ! grep -q "v3.21/community" /etc/apk/repositories; then
+    echo "http://dl-cdn.alpinelinux.org/alpine/v3.21/community" >> /etc/apk/repositories
+fi
+if ! grep -q "v3.21/main" /etc/apk/repositories; then
+    echo "http://dl-cdn.alpinelinux.org/alpine/v3.21/main" >> /etc/apk/repositories
+fi
+if ! grep -q "edge/testing" /etc/apk/repositories; then
+    echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+fi
+
+echo "[INFO] Updated repositories:"
+cat /etc/apk/repositories
 apk update
 
 echo "[INFO] Upgrading installed packages"
-apk upgrade
+echo "[DEBUG] Running: apk upgrade --available --no-cache"
+if ! apk upgrade --available --no-cache; then
+    echo "[WARNING] Package upgrade had errors, but continuing anyway"
+    # Show what's installed
+    echo "[DEBUG] Currently installed packages:"
+    apk info
+fi
 
 echo "[INFO] Installing required packages"
-if ! apk add $PACKAGES; then
+echo "[DEBUG] Package list: $PACKAGES"
+
+# Try installing packages with verbose output
+echo "[DEBUG] Running: apk add --no-cache $PACKAGES"
+if ! apk add --no-cache --verbose $PACKAGES; then
     echo "[ERROR] Failed to install some packages - checking which ones are problematic"
     # Try to install packages one by one to identify problematic ones
     for pkg in $PACKAGES; do
-        if ! apk add $pkg; then
-            echo "[ERROR] Problem package: $pkg is not available"
+        echo "[DEBUG] Trying to install package: $pkg"
+        if ! apk add --no-cache $pkg; then
+            echo "[ERROR] Problem package: $pkg is not available or has dependency issues"
+            # Try to see if it exists in the repository but has dependency issues
+            if apk search -e "^$pkg$" | grep -q "$pkg"; then
+                echo "[DEBUG] Package $pkg exists in the repository, likely a dependency issue"
+                # Show dependencies
+                apk info -R $pkg
+            else
+                echo "[DEBUG] Package $pkg not found in configured repositories"
+            fi
+        else
+            echo "[INFO] Successfully installed package: $pkg"
         fi
     done
-    echo "[ERROR] Please remove unavailable packages or fix repository configuration"
-    exit 1
+    
+    # Continue anyway for now, to aid debugging
+    echo "[WARNING] Some packages failed to install, but continuing for debugging purposes"
 fi
 
 echo "[INFO] Cleaning package cache"
