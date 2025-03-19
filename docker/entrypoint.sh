@@ -336,6 +336,13 @@ run_build() {
             # Set flag to finalize timing log in the last script
             export FINALIZE_TIMING_LOG=true
             
+            # Make sure BUILD_TYPE is explicitly added to the command line arguments
+            # This ensures the profile is correctly passed to 04_build.sh
+            if [ -n "${BUILD_TYPE:-}" ] && [[ "$BUILD_ARGS" != *"--${BUILD_TYPE}"* ]]; then
+                echo "Adding --${BUILD_TYPE} flag to ensure profile is correctly set"
+                BUILD_ARGS="--${BUILD_TYPE} $BUILD_ARGS"
+            fi
+            
             # Pass the build arguments directly to 04_build.sh
             ./04_build.sh $BUILD_ARGS
             
@@ -362,8 +369,15 @@ run_build() {
             # Set flag to finalize timing log in the last script
             export FINALIZE_TIMING_LOG=true
             
-            # Pass default build arguments directly to 04_build.sh
-            ./04_build.sh --use-cache --use-swap
+            # Prepare the build arguments based on profile
+            local build_args="--use-cache --use-swap"
+            if [ -n "${BUILD_TYPE:-}" ]; then
+                echo "Adding --${BUILD_TYPE} flag to ensure profile is correctly set"
+                build_args="--${BUILD_TYPE} $build_args"
+            fi
+            
+            # Pass build arguments directly to 04_build.sh
+            ./04_build.sh $build_args
             
             echo "CCache statistics after build:"
             ccache -s
@@ -397,13 +411,26 @@ run_build() {
         if [ -f "04_build.sh" ]; then
             chmod +x 04_build.sh
             if [ -n "$BUILD_ARGS" ]; then
+                # Make sure BUILD_TYPE is explicitly added to the command line arguments
+                if [ -n "${BUILD_TYPE:-}" ] && [[ "$BUILD_ARGS" != *"--${BUILD_TYPE}"* ]]; then
+                    echo "Adding --${BUILD_TYPE} flag to ensure profile is correctly set"
+                    BUILD_ARGS="--${BUILD_TYPE} $BUILD_ARGS"
+                fi
+                
                 echo "Running: ./04_build.sh $BUILD_ARGS"
                 echo "WARNING: Using direct build.sh approach is deprecated. Prefer library-based build system."
                 ./04_build.sh $BUILD_ARGS
             else
-                echo "Running: ./04_build.sh"
+                # Prepare the build arguments based on profile
+                local build_args=""
+                if [ -n "${BUILD_TYPE:-}" ]; then
+                    echo "Adding --${BUILD_TYPE} flag to ensure profile is correctly set"
+                    build_args="--${BUILD_TYPE}"
+                fi
+                
+                echo "Running: ./04_build.sh $build_args"
                 echo "WARNING: Using direct build.sh approach is deprecated. Prefer library-based build system."
-                ./04_build.sh
+                ./04_build.sh $build_args
             fi
         else
             echo "ERROR: Build script 04_build.sh not found"
