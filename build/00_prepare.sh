@@ -149,70 +149,46 @@ main() {
     log "INFO" ""
     # Install dependencies based on OS
     case "$OS" in
-        "Ubuntu"|"Debian"|"Pop!_OS"|"Linux Mint")
+        "Ubuntu"|"Debian"|"Pop!_OS"|"Linux Mint"|"Fedora"|"CentOS"|"Red Hat Enterprise Linux"|"RHEL"|"Arch Linux"|"Manjaro Linux"|"Alpine Linux")
             check_root
             log "INFO" "Installing dependencies for $OS..."
-            apt-get update
-            apt-get install -y wget tar xz-utils build-essential flex bison libssl-dev bc kmod libelf-dev
             
-            # Install compression tools
-            log "INFO" "Installing compression tools..."
-            apt-get install -y xz-utils lzma zstd upx-ucl
-            
-            # Install build performance tools
-            log "INFO" "Installing build performance tools..."
-            apt-get install -y ccache
-            ;;
-        "Fedora"|"CentOS"|"Red Hat Enterprise Linux"|"RHEL")
-            check_root
-            log "INFO" "Installing dependencies for $OS..."
-            if command -v dnf &> /dev/null; then
-                dnf install -y wget tar xz-utils gcc make flex bison openssl-devel bc kmod elfutils-libelf-devel
+            # Use dependency helper to determine the correct install command and packages
+            if [ -f "85_dependency_helper.sh" ]; then
+                # Source the dependency helper if not already loaded
+                if ! is_library_loaded "85_dependency_helper"; then
+                    source_library "./85_dependency_helper.sh"
+                fi
                 
-                # Install compression tools
-                log "INFO" "Installing compression tools..."
-                dnf install -y xz lzma-sdk-devel zstd upx || true  # Continue even if some packages aren't available
+                # Get the install command and execute it
+                local install_cmd=$(get_os_install_command)
+                log "INFO" "Running: $install_cmd"
+                eval "$install_cmd"
                 
-                # Install build performance tools
-                log "INFO" "Installing build performance tools..."
-                dnf install -y ccache
+                log "SUCCESS" "Installed all required dependencies for $OS"
             else
-                yum install -y wget tar xz-utils gcc make flex bison openssl-devel bc kmod elfutils-libelf-devel
-                
-                # Install compression tools
-                log "INFO" "Installing compression tools..."
-                yum install -y xz lzma-sdk-devel zstd upx || true  # Continue even if some packages aren't available
-                
-                # Install build performance tools
-                log "INFO" "Installing build performance tools..."
-                yum install -y ccache
+                # Fallback if dependency helper is not available
+                log "WARNING" "Dependency helper not found, using hardcoded dependencies"
+                case "$OS" in
+                    "Ubuntu"|"Debian"|"Pop!_OS"|"Linux Mint")
+                        apt-get update
+                        apt-get install -y wget tar xz-utils build-essential flex bison libssl-dev bc kmod libelf-dev xz-utils lzma zstd upx-ucl ccache
+                        ;;
+                    "Fedora"|"CentOS"|"Red Hat Enterprise Linux"|"RHEL")
+                        if command -v dnf &> /dev/null; then
+                            dnf install -y wget tar xz gcc make flex bison openssl-devel bc kmod elfutils-libelf-devel xz zstd upx ccache
+                        else
+                            yum install -y wget tar xz gcc make flex bison openssl-devel bc kmod elfutils-libelf-devel xz zstd upx ccache
+                        fi
+                        ;;
+                    "Arch Linux"|"Manjaro Linux")
+                        pacman -Sy --noconfirm wget tar xz base-devel flex bison openssl bc kmod libelf xz zstd upx ccache
+                        ;;
+                    "Alpine Linux")
+                        apk add wget tar xz build-base flex bison openssl-dev bc kmod libelf elfutils-dev xz zstd upx ccache
+                        ;;
+                esac
             fi
-            ;;
-        "Arch Linux"|"Manjaro Linux")
-            check_root
-            log "INFO" "Installing dependencies for $OS..."
-            pacman -Sy --noconfirm wget tar xz base-devel flex bison openssl bc kmod libelf
-            
-            # Install compression tools
-            log "INFO" "Installing compression tools..."
-            pacman -Sy --noconfirm xz zstd upx || true  # Continue even if some packages aren't available
-            
-            # Install build performance tools
-            log "INFO" "Installing build performance tools..."
-            pacman -Sy --noconfirm ccache
-            ;;
-        "Alpine Linux")
-            check_root
-            log "INFO" "Installing dependencies for $OS..."
-            apk add wget tar xz build-base flex bison openssl-dev bc kmod libelf elfutils-dev
-            
-            # Install compression tools
-            log "INFO" "Installing compression tools..."
-            apk add xz zstd upx || true  # Continue even if some packages aren't available
-            
-            # Install build performance tools
-            log "INFO" "Installing build performance tools..."
-            apk add ccache
             ;;
         "macOS")
             log "WARNING" "macOS detected. You need a Linux environment to build OneFileLinux."
@@ -220,7 +196,7 @@ main() {
             log "INFO" ""
             log "INFO" "For Docker, you can use:"
             log "INFO" "  docker run -it --rm -v $(pwd)/..:/build ubuntu:latest bash"
-            log "INFO" "  cd /build/FoxBuild && ./00_prepare.sh"
+            log "INFO" "  cd /build/build && ./00_prepare.sh"
             log "INFO" ""
             log "INFO" "If you have homebrew installed, we can install wget which is needed for downloading:"
             if command -v brew &> /dev/null; then

@@ -228,6 +228,17 @@ source_libraries() {
         source_library "$script_path/84_build_core.sh"
     fi
     
+    # Dependency helper library (if available)
+    if [ -f "$script_path/85_dependency_helper.sh" ]; then
+        # Ensure it's executable
+        if [ ! -x "$script_path/85_dependency_helper.sh" ]; then
+            chmod +x "$script_path/85_dependency_helper.sh" 2>/dev/null || 
+                echo -e "${YELLOW}[WARNING]${NC} Could not make dependency helper library executable"
+        fi
+        
+        source_library "$script_path/85_dependency_helper.sh"
+    fi
+    
     # Debug information about loaded libraries
     if [ "${DEBUG_LIBRARY_LOADING:-}" = "true" ]; then
         local calling_script=$(caller | awk '{print $2}')
