@@ -385,6 +385,16 @@ create_efi() {
         log "INFO" "Detected build profile for EFI filename: $profile_name"
     fi
     
+    # Override profile name if BUILD_TYPE is set to minimal but profile doesn't match
+    if [ "${BUILD_TYPE:-}" = "minimal" ] && [ "$profile_name" != "minimal" ]; then
+        log "INFO" "BUILD_TYPE is minimal but profile name is $profile_name, correcting to minimal"
+        profile_name="minimal"
+        # Also update the active build profile if the function exists
+        if type -t set_active_build_profile &>/dev/null; then
+            set_active_build_profile "$profile_name"
+        fi
+    fi
+    
     # Create the EFI filename using the profile name
     local efi_file_name="OneFileLinux-${profile_name}.efi"
     
