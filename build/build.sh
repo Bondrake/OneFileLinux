@@ -72,8 +72,10 @@ source ./80_common.sh
 # Source all library scripts using the source_libraries function
 source_libraries "."
 
-# The build core library is now loaded via source_libraries
-# No need for separate loading of 84_build_core.sh here
+# Set a default build profile early 
+if type -t apply_build_profile &>/dev/null; then
+    apply_build_profile "$BUILD_PROFILE"
+fi
 
 # Set error handling
 trap 'echo -e "${RED}[ERROR]${NC} An error occurred at line $LINENO. Command: $BASH_COMMAND"; exit 1' ERR

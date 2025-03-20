@@ -598,57 +598,39 @@ parse_build_args() {
     # Check if BUILD_TYPE is already set from environment
     # If it's set (especially by Docker entrypoint), respect it
     if [ -z "${BUILD_TYPE:-}" ]; then
-        # Default settings if not already set
-        BUILD_TYPE="standard"
+        # Default to standard profile
+        apply_build_profile "standard"
     else
         log "INFO" "Using BUILD_TYPE from environment: $BUILD_TYPE"
+        # Apply the profile that matches the BUILD_TYPE
+        apply_build_profile "$BUILD_TYPE"
     fi
     
-    # Optional components
-    INCLUDE_MINIMAL_KERNEL="${INCLUDE_MINIMAL_KERNEL:-false}"
-    INCLUDE_ZFS="${INCLUDE_ZFS:-true}"
-    INCLUDE_BTRFS="${INCLUDE_BTRFS:-false}"
-    INCLUDE_RECOVERY_TOOLS="${INCLUDE_RECOVERY_TOOLS:-true}"
-    INCLUDE_NETWORK_TOOLS="${INCLUDE_NETWORK_TOOLS:-true}"
-    INCLUDE_CRYPTO="${INCLUDE_CRYPTO:-true}"
-    INCLUDE_TUI="${INCLUDE_TUI:-true}"
-    INCLUDE_COMPRESSION="${INCLUDE_COMPRESSION:-true}"
-    COMPRESSION_TOOL="${COMPRESSION_TOOL:-upx}"
-    
-    # Build performance options
+    # Performance options - not controlled by profiles
     USE_CACHE="${USE_CACHE:-false}"
     USE_SWAP="${USE_SWAP:-false}"
     INTERACTIVE_CONFIG="${INTERACTIVE_CONFIG:-false}"
     MAKE_VERBOSE="${MAKE_VERBOSE:-0}"
+    COMPRESSION_TOOL="${COMPRESSION_TOOL:-upx}"
     
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --minimal)
-                BUILD_TYPE="minimal"
-                INCLUDE_ZFS=false
-                INCLUDE_BTRFS=false
-                INCLUDE_RECOVERY_TOOLS=false
-                INCLUDE_NETWORK_TOOLS=false
-                INCLUDE_CRYPTO=false
-                INCLUDE_TUI=false
-                INCLUDE_MINIMAL_KERNEL=true
-                # Set the BUILD_TYPE directly
-                export BUILD_TYPE="minimal"
+                # Use apply_build_profile from 86_build_profiles.sh
+                apply_build_profile "minimal"
+                shift
+                ;;
+            --standard)
+                # Use apply_build_profile from 86_build_profiles.sh
+                apply_build_profile "standard"
                 shift
                 ;;
             --full)
-                BUILD_TYPE="full"
-                INCLUDE_ZFS=true
-                INCLUDE_BTRFS=true
-                INCLUDE_RECOVERY_TOOLS=true
-                INCLUDE_NETWORK_TOOLS=true
-                INCLUDE_CRYPTO=true
-                INCLUDE_TUI=true
-                INCLUDE_MINIMAL_KERNEL=false
-                # Set the BUILD_TYPE directly
-                export BUILD_TYPE="full"
+                # Use apply_build_profile from 86_build_profiles.sh
+                apply_build_profile "full"
                 shift
                 ;;
+            # Individual component options still handled individually
             --minimal-kernel)
                 INCLUDE_MINIMAL_KERNEL=true
                 shift
@@ -775,26 +757,31 @@ parse_build_args() {
         esac
     done
     
-    # Print configuration summary
+    # Print configuration summary using the profile name
     log "INFO" "Build configuration:"
-    log "INFO" "- Build type: $BUILD_TYPE"
-    log "INFO" "- Minimal kernel: $(bool_to_str "$INCLUDE_MINIMAL_KERNEL")"
-    log "INFO" "- ZFS support: $(bool_to_str "$INCLUDE_ZFS")"
-    log "INFO" "- Btrfs support: $(bool_to_str "$INCLUDE_BTRFS")"
-    log "INFO" "- Recovery tools: $(bool_to_str "$INCLUDE_RECOVERY_TOOLS")"
-    log "INFO" "- Network tools: $(bool_to_str "$INCLUDE_NETWORK_TOOLS")"
-    log "INFO" "- Crypto support: $(bool_to_str "$INCLUDE_CRYPTO")"
-    log "INFO" "- Text User Interface: $(bool_to_str "$INCLUDE_TUI")"
-    log "INFO" "- Compression: $(bool_to_str "$INCLUDE_COMPRESSION")"
+    log "INFO" "- Build profile: $BUILD_TYPE"
     
-    if [ "$INCLUDE_COMPRESSION" = "true" ]; then
-        log "INFO" "- Compression tool: $COMPRESSION_TOOL"
+    # Display feature settings
+    log "INFO" "- Feature settings:"
+    log "INFO" "  - Minimal kernel: $(bool_to_str "${INCLUDE_MINIMAL_KERNEL:-false}")"
+    log "INFO" "  - ZFS support: $(bool_to_str "${INCLUDE_ZFS:-true}")"
+    log "INFO" "  - Btrfs support: $(bool_to_str "${INCLUDE_BTRFS:-false}")"
+    log "INFO" "  - Recovery tools: $(bool_to_str "${INCLUDE_RECOVERY_TOOLS:-true}")"
+    log "INFO" "  - Network tools: $(bool_to_str "${INCLUDE_NETWORK_TOOLS:-true}")"
+    log "INFO" "  - Crypto support: $(bool_to_str "${INCLUDE_CRYPTO:-true}")"
+    log "INFO" "  - Text User Interface: $(bool_to_str "${INCLUDE_TUI:-true}")"
+    log "INFO" "  - Compression: $(bool_to_str "${INCLUDE_COMPRESSION:-true}")"
+    
+    if [ "${INCLUDE_COMPRESSION:-true}" = "true" ]; then
+        log "INFO" "  - Compression tool: $COMPRESSION_TOOL"
     fi
     
-    log "INFO" "- Use caching: $(bool_to_str "$USE_CACHE")"
-    log "INFO" "- Use swap if needed: $(bool_to_str "$USE_SWAP")"
-    log "INFO" "- Interactive config: $(bool_to_str "$INTERACTIVE_CONFIG")"
-    log "INFO" "- Verbose make output: $(bool_to_str "$MAKE_VERBOSE")"
+    # Display build performance settings
+    log "INFO" "- Build performance settings:"
+    log "INFO" "  - Use caching: $(bool_to_str "$USE_CACHE")"
+    log "INFO" "  - Use swap if needed: $(bool_to_str "$USE_SWAP")"
+    log "INFO" "  - Interactive config: $(bool_to_str "$INTERACTIVE_CONFIG")"
+    log "INFO" "  - Verbose make output: $(bool_to_str "$MAKE_VERBOSE")"
 }
 
 # Export all functions for use in other scripts
