@@ -22,12 +22,6 @@ source "${SCRIPT_DIR}/80_common.sh"
 # Source all library scripts using the source_libraries function
 source_libraries "${SCRIPT_DIR}"
 
-# The build core library is now loaded via source_libraries
-# No need for separate loading of 84_build_core.sh here
-
-# Profile management is now handled by 83_config_helper.sh via get_active_build_profile/set_active_build_profile
-# No need to manually source build_type.env, as we now use a more consistent approach
-
 # Initialize script with standard header (prints banner)
 initialize_script
 
@@ -145,10 +139,9 @@ main() {
     # Check if we have an expected EFI filename from create_efi function
     if [ -n "${EXPECTED_EFI_FILENAME:-}" ]; then
         efi_filename="$EXPECTED_EFI_FILENAME"
-    # Otherwise try to get active profile 
-    elif type -t get_active_build_profile &>/dev/null; then
-        local profile=$(get_active_build_profile)
-        efi_filename="OneFileLinux-${profile}.efi"
+    # Use BUILD_TYPE if available
+    elif [ -n "${BUILD_TYPE:-}" ]; then
+        efi_filename="OneFileLinux-${BUILD_TYPE}.efi"
     # Fall back to generic name if needed
     else
         efi_filename="OneFileLinux.efi"

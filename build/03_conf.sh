@@ -149,79 +149,41 @@ KERNEL_CONFIG_DIR="kernel-configs"
 FEATURES_DIR="$KERNEL_CONFIG_DIR/features"
 ALPINE_CONFIG_MINIMAL="$KERNEL_CONFIG_DIR/minimal.config"
 ALPINE_CONFIG_STANDARD="$KERNEL_CONFIG_DIR/standard.config"
-LEGACY_MINIMAL_CONFIG="zfiles/kernel-minimal.config"
-LEGACY_STANDARD_CONFIG="zfiles/.config"
 
 # Make sure the kernel config directories exist
 mkdir -p "$KERNEL_CONFIG_DIR/base"
 mkdir -p "$FEATURES_DIR"
 
-# Download Alpine kernel config if needed
-if [ "${USE_ALPINE_KERNEL_CONFIG:-true}" = "true" ]; then
-    log "INFO" "Setting up Alpine Linux kernel configuration"
-    if [ -f "./tools/get-alpine-kernel-config.sh" ]; then
-        chmod +x ./tools/get-alpine-kernel-config.sh
-        ./tools/get-alpine-kernel-config.sh --dir="$(pwd)" --version="${ALPINE_VERSION}"
-        
-        # Verify the download was successful
-        if [ ! -f "$ALPINE_CONFIG_MINIMAL" ] || [ ! -s "$ALPINE_CONFIG_MINIMAL" ]; then
-            log "ERROR" "Failed to download Alpine kernel config. Check network connection."
-            log "INFO" "Falling back to legacy kernel config."
-            USE_ALPINE_KERNEL_CONFIG=false
-            
-            # Use legacy configs if available
-            if [ -f "$LEGACY_MINIMAL_CONFIG" ]; then
-                log "INFO" "Using legacy minimal kernel config: $LEGACY_MINIMAL_CONFIG"
-                mkdir -p "$(dirname "$ALPINE_CONFIG_MINIMAL")"
-                cp "$LEGACY_MINIMAL_CONFIG" "$ALPINE_CONFIG_MINIMAL"
-            else
-                log "ERROR" "No kernel configuration available."
-                exit 1
-            fi
-        else
-            log "SUCCESS" "Alpine kernel configuration downloaded successfully"
-        fi
-    else
-        log "ERROR" "Alpine kernel config download script not found."
+# Download Alpine kernel config
+log "INFO" "Setting up Alpine Linux kernel configuration"
+if [ -f "./tools/get-alpine-kernel-config.sh" ]; then
+    chmod +x ./tools/get-alpine-kernel-config.sh
+    ./tools/get-alpine-kernel-config.sh --dir="$(pwd)" --version="${ALPINE_VERSION}"
+    
+    # Verify the download was successful
+    if [ ! -f "$ALPINE_CONFIG_MINIMAL" ] || [ ! -s "$ALPINE_CONFIG_MINIMAL" ]; then
+        log "ERROR" "Failed to download Alpine kernel config. Check network connection."
         exit 1
+    else
+        log "SUCCESS" "Alpine kernel configuration downloaded successfully"
     fi
+else
+    log "ERROR" "Alpine kernel config download script not found."
+    exit 1
 fi
 
 # Check for custom kernel configuration
 if [ -n "${CUSTOM_KERNEL_CONFIG:-}" ] && [ -f "${CUSTOM_KERNEL_CONFIG}" ]; then
     log "INFO" "Using custom kernel configuration: ${CUSTOM_KERNEL_CONFIG}"
     cp "${CUSTOM_KERNEL_CONFIG}" linux/.config
-
-# Use Alpine-based config if enabled
-elif [ "${USE_ALPINE_KERNEL_CONFIG:-true}" = "true" ]; then
+else
+    # Use Alpine-based config
     if [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ]; then
-        if [ ! -f "$ALPINE_CONFIG_MINIMAL" ]; then
-            log "ERROR" "Alpine minimal kernel config not found: $ALPINE_CONFIG_MINIMAL"
-            log "INFO" "Falling back to legacy kernel config"
-            
-            if [ ! -f "$LEGACY_MINIMAL_CONFIG" ]; then
-                log "ERROR" "Legacy minimal kernel config not found: $LEGACY_MINIMAL_CONFIG"
-                exit 1
-            fi
-            cp "$LEGACY_MINIMAL_CONFIG" linux/.config
-        else
-            log "INFO" "Using Alpine-based minimal kernel configuration"
-            cp "$ALPINE_CONFIG_MINIMAL" linux/.config
-        fi
+        log "INFO" "Using Alpine-based minimal kernel configuration"
+        cp "$ALPINE_CONFIG_MINIMAL" linux/.config
     else
-        if [ ! -f "$ALPINE_CONFIG_STANDARD" ]; then
-            log "ERROR" "Alpine standard kernel config not found: $ALPINE_CONFIG_STANDARD"
-            log "INFO" "Falling back to legacy kernel config"
-            
-            if [ ! -f "$LEGACY_STANDARD_CONFIG" ]; then
-                log "ERROR" "Legacy standard kernel config not found: $LEGACY_STANDARD_CONFIG"
-                exit 1
-            fi
-            cp "$LEGACY_STANDARD_CONFIG" linux/.config
-        else
-            log "INFO" "Using Alpine-based standard kernel configuration"
-            cp "$ALPINE_CONFIG_STANDARD" linux/.config
-        fi
+        log "INFO" "Using Alpine-based standard kernel configuration"
+        cp "$ALPINE_CONFIG_STANDARD" linux/.config
     fi
 
     # Apply feature overlays based on package selection
@@ -284,32 +246,9 @@ elif [ "${USE_ALPINE_KERNEL_CONFIG:-true}" = "true" ]; then
             fi
         fi
     fi
-
-# Use legacy kernel configs
-else
-    # Use appropriate kernel config based on build type
-    if [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ]; then
-        if [ ! -f "$LEGACY_MINIMAL_CONFIG" ]; then
-            log "ERROR" "Minimal kernel configuration file not found: $LEGACY_MINIMAL_CONFIG"
-            exit 1
-        fi
-        log "INFO" "Using legacy minimal kernel configuration"
-        cp "$LEGACY_MINIMAL_CONFIG" linux/.config
-    else
-        if [ ! -f "$LEGACY_STANDARD_CONFIG" ]; then
-            log "ERROR" "Standard kernel configuration file not found: $LEGACY_STANDARD_CONFIG"
-            exit 1
-        fi
-        log "INFO" "Using legacy standard kernel configuration"
-        cp "$LEGACY_STANDARD_CONFIG" linux/.config
-    fi
 fi
 
 log "SUCCESS" "Kernel configuration copied"
-
-# Legacy commented code preserved for reference
-#cd linux
-#make menuconfig
 
 # End timing for kernel configuration
 end_timing

@@ -248,55 +248,7 @@ setup_cache() {
     fi
 }
 
-# Add function to track the active build profile
-set_active_build_profile() {
-    local profile_name="$1"
-    export ACTIVE_BUILD_PROFILE="$profile_name"
-    
-    # Also write to a file for persistence across scripts
-    echo "$profile_name" > "${BUILD_DIR:-$(pwd)}/active_profile.txt"
-    log "INFO" "Set active build profile: $profile_name"
-}
-
-# Function to get the active build profile
-get_active_build_profile() {
-    # Check in priority order, using the first available source:
-    
-    # 1. Check explicit BUILD_TYPE environment variable (for backward compatibility)
-    if [ -n "${BUILD_TYPE:-}" ]; then
-        # Check if it's a valid profile (minimal, standard, full)
-        case "${BUILD_TYPE}" in
-            minimal|standard|full)
-                log "DEBUG" "Using '${BUILD_TYPE}' profile from BUILD_TYPE environment variable"
-                export ACTIVE_BUILD_PROFILE="${BUILD_TYPE}"
-                echo "${BUILD_TYPE}"
-                return 0
-                ;;
-        esac
-    fi
-
-    # 2. Check ACTIVE_BUILD_PROFILE environment variable
-    if [ -n "${ACTIVE_BUILD_PROFILE:-}" ]; then
-        log "DEBUG" "Using profile from ACTIVE_BUILD_PROFILE: $ACTIVE_BUILD_PROFILE"
-        echo "$ACTIVE_BUILD_PROFILE"
-        return 0
-    fi
-    
-    # 3. Check active_profile.txt file
-    local profile_file="${BUILD_DIR:-$(pwd)}/active_profile.txt"
-    if [ -f "$profile_file" ]; then
-        ACTIVE_BUILD_PROFILE=$(cat "$profile_file")
-        export ACTIVE_BUILD_PROFILE
-        log "DEBUG" "Using profile from file: $ACTIVE_BUILD_PROFILE"
-        echo "$ACTIVE_BUILD_PROFILE"
-        return 0
-    fi
-    
-    # 4. Default to standard if no profile is set
-    log "DEBUG" "No active profile found, defaulting to standard"
-    echo "standard"
-    return 0
-}
+# Profile management has been removed in favor of boolean variables in build.sh
 
 # Generate a password hash for /etc/shadow
 create_password_hash() {
@@ -324,6 +276,5 @@ export -f bool_to_str
 export -f print_config
 export -f generate_module_env
 export -f setup_cache
-export -f set_active_build_profile
-export -f get_active_build_profile
+# Profile management functions have been removed
 export -f create_password_hash

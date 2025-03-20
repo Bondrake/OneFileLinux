@@ -172,82 +172,26 @@ setup_kernel_config() {
     
     # Check for kernel-configs directory structure
     local config_base="${BUILD_DIR:-$workdir}/kernel-configs"
-    local use_overlay=false
-    local base_config=""
     
-    # Determine if we should use the overlay system
-    if [ -d "$config_base" ]; then
-        echo "Using kernel config overlay system"
-        use_overlay=true
-        
-        # Choose the appropriate base config
-        case "${config_type:-standard}" in
-            "minimal")
-                base_config="$config_base/minimal.config"
-                ;;
-            "standard"|*)
-                base_config="$config_base/standard.config"
-                ;;
-        esac
-    fi
+    # Choose the appropriate base config
+    case "${config_type:-standard}" in
+        "minimal")
+            base_config="$config_base/minimal.config"
+            ;;
+        "standard"|*)
+            base_config="$config_base/standard.config"
+            ;;
+    esac
     
     # Check for existing config
     if [ ! -f "$kernel_dir/.config" ]; then
         echo "Kernel config not found, creating one"
         
-        if [ "$use_overlay" = "true" ] && [ -f "$base_config" ]; then
-            echo "Copying base config from overlay system: $base_config"
+        if [ -f "$base_config" ]; then
+            echo "Copying Alpine kernel config: $base_config"
             cp "$base_config" "$kernel_dir/.config"
-        elif [ "$config_type" = "minimal" ] && [ -f "$zfiles_dir/kernel-minimal.config" ]; then
-            echo "Copying minimal kernel config from zfiles (legacy)"
-            cp "$zfiles_dir/kernel-minimal.config" "$kernel_dir/.config"
-        elif [ -f "$zfiles_dir/.config" ]; then
-            echo "Copying standard kernel config from zfiles (legacy)"
-            cp "$zfiles_dir/.config" "$kernel_dir/.config"
-        else
-            echo "No config found in zfiles, creating default config"
-            # Create a minimal kernel config
-            cat > "/tmp/minimal.config" << EOF
-# Minimal kernel configuration
-CONFIG_64BIT=y
-CONFIG_X86_64=y
-CONFIG_SMP=y
-CONFIG_MODULES=y
-CONFIG_MODULE_UNLOAD=y
-CONFIG_ZLIB_DEFLATE=y
-CONFIG_ZLIB_INFLATE=y
-CONFIG_EFI=y
-CONFIG_EFI_STUB=y
-CONFIG_BLK_DEV_INITRD=y
-CONFIG_BINFMT_ELF=y
-CONFIG_FS_POSIX_ACL=y
-CONFIG_TMPFS=y
-CONFIG_TMPFS_POSIX_ACL=y
-CONFIG_PROC_FS=y
-CONFIG_SYSFS=y
-CONFIG_DEVTMPFS=y
-CONFIG_UNIX=y
-CONFIG_NET=y
-CONFIG_INET=y
-CONFIG_BLK_DEV=y
-CONFIG_BLK_DEV_SD=y
-CONFIG_ATA=y
-CONFIG_SATA_AHCI=y
-CONFIG_USB_SUPPORT=y
-CONFIG_USB=y
-CONFIG_USB_EHCI_HCD=y
-CONFIG_USB_XHCI_HCD=y
-CONFIG_USB_STORAGE=y
-CONFIG_EXT4_FS=y
-CONFIG_CRYPTO=y
-EOF
-            cp "/tmp/minimal.config" "$kernel_dir/.config"
-            rm "/tmp/minimal.config"
-        fi
-        
-        # Apply config overlays if using the new system
-        if [ "$use_overlay" = "true" ]; then
-            # Check for feature directories
+            
+            # Apply config overlays if feature directory exists
             local feature_dir="$config_base/features"
             if [ -d "$feature_dir" ]; then
                 echo "Applying feature config overlays:"
@@ -258,10 +202,13 @@ EOF
                     cat "$feature_dir/zfs-support.conf" >> "$kernel_dir/.config"
                 fi
             fi
+            
+            # Run olddefconfig to ensure the config is valid
+            (cd "$kernel_dir" && make olddefconfig)
+        else
+            echo "Error: Alpine kernel config not found: $base_config"
+            return 1
         fi
-        
-        # Run olddefconfig to ensure the config is valid
-        (cd "$kernel_dir" && make olddefconfig)
     fi
     
     return 0

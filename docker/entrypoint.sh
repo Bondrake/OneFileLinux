@@ -319,14 +319,9 @@ run_build() {
             
             echo "DEBUG: Set BUILD_TYPE=$BUILD_TYPE and profile=$profile"
             
-            # Source the config_helper to get access to profile management functions
-            if [ -f "$BUILD_DIR/83_config_helper.sh" ]; then
-                source "$BUILD_DIR/83_config_helper.sh"
-                set_active_build_profile "$profile"
-            else
-                echo "WARNING: Could not find 83_config_helper.sh, using fallback method"
-                echo "$profile" > "$BUILD_DIR/active_profile.txt"
-            fi
+            # Just set the BUILD_TYPE directly
+            export BUILD_TYPE="$profile"
+            echo "Set BUILD_TYPE=$profile"
 
             # Log the configuration that will be used
             echo "Using build configuration:"

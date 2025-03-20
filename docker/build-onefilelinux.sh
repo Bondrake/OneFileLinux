@@ -275,13 +275,17 @@ else
     # Check for output files with timestamp verification
     echo -e "${BLUE}[INFO]${NC} Checking for recent build output files..."
     
-    # Check if active_profile.txt exists to determine expected output file
+    # Look for any EFI files
     EXPECTED_EFI_FILE=""
-    if [ -f "$PROJECT_DIR/build/active_profile.txt" ]; then
-        ACTIVE_PROFILE=$(cat "$PROJECT_DIR/build/active_profile.txt")
-        EXPECTED_EFI_FILE="OneFileLinux-${ACTIVE_PROFILE}.efi"
-        echo -e "${BLUE}[INFO]${NC} Looking for expected output file: ${EXPECTED_EFI_FILE}"
-    fi
+    
+    # Check for standard minimal and full profiles
+    for profile in "minimal" "standard" "full"; do
+        if [ -f "$PROJECT_DIR/output/OneFileLinux-${profile}.efi" ]; then
+            EXPECTED_EFI_FILE="OneFileLinux-${profile}.efi"
+            echo -e "${BLUE}[INFO]${NC} Found EFI file for ${profile} profile: ${EXPECTED_EFI_FILE}"
+            break
+        fi
+    done
     
     # Current time in seconds since epoch
     CURRENT_TIME=$(date +%s)

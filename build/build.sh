@@ -45,7 +45,6 @@ USE_SWAP=false        # Create swap file if memory is low
 INTERACTIVE_CONFIG=false  # Use interactive kernel configuration
 
 # Kernel configuration options
-USE_ALPINE_KERNEL_CONFIG=true   # Use Alpine's kernel configuration
 AUTO_KERNEL_CONFIG=true         # Automatically apply feature-specific options
 
 # Customization options
@@ -162,7 +161,6 @@ BUILD_JOBS=$BUILD_JOBS
 KEEP_CCACHE=$KEEP_CCACHE
 USE_SWAP=$USE_SWAP
 INTERACTIVE_CONFIG=$INTERACTIVE_CONFIG
-USE_ALPINE_KERNEL_CONFIG=$USE_ALPINE_KERNEL_CONFIG
 AUTO_KERNEL_CONFIG=$AUTO_KERNEL_CONFIG
 
 # Customization options
@@ -301,8 +299,6 @@ usage_modules() {
     echo "  --no-swap              Do not create swap file even if memory is low"
     echo "  --interactive-config   Use interactive kernel configuration (menuconfig)"
     echo "  --no-interactive-config Use non-interactive kernel config (default)"
-    echo "  --use-alpine-kernel-config  Use Alpine Linux's kernel config (default: yes)"
-    echo "  --no-alpine-kernel-config   Do not use Alpine Linux's kernel config"
     echo "  --auto-kernel-config      Automatically apply feature-specific kernel options (default: yes)"
     echo "  --no-auto-kernel-config   Don't automatically apply feature-specific kernel options"
     echo ""
@@ -616,14 +612,6 @@ process_args() {
                 INTERACTIVE_CONFIG=false
                 shift
                 ;;
-            --use-alpine-kernel-config)
-                USE_ALPINE_KERNEL_CONFIG=true
-                shift
-                ;;
-            --no-alpine-kernel-config)
-                USE_ALPINE_KERNEL_CONFIG=false
-                shift
-                ;;
             --auto-kernel-config)
                 AUTO_KERNEL_CONFIG=true
                 shift
@@ -828,7 +816,6 @@ generate_module_env() {
     env_vars+="export KEEP_CCACHE=$KEEP_CCACHE "
     env_vars+="export USE_SWAP=$USE_SWAP "
     env_vars+="export INTERACTIVE_CONFIG=$INTERACTIVE_CONFIG "
-    env_vars+="export USE_ALPINE_KERNEL_CONFIG=$USE_ALPINE_KERNEL_CONFIG "
     env_vars+="export AUTO_KERNEL_CONFIG=$AUTO_KERNEL_CONFIG "
     
     # Set customization variables

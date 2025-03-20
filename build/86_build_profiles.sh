@@ -127,15 +127,9 @@ apply_build_profile() {
     log "INFO" "Applying build profile: $profile_name"
     eval "${BUILD_PROFILES[$profile_name]}"
     
-    # Track the active profile if the function exists
-    if type -t set_active_build_profile &>/dev/null; then
-        set_active_build_profile "$profile_name"
-    else
-        # Fallback if function doesn't exist yet
-        export ACTIVE_BUILD_PROFILE="$profile_name"
-        echo "$profile_name" > "${BUILD_DIR:-$(pwd)}/active_profile.txt"
-        log "INFO" "Set active build profile: $profile_name"
-    fi
+    # Just set BUILD_TYPE variable
+    export BUILD_TYPE="$profile_name"
+    log "INFO" "Applied build profile: $profile_name"
     
     return 0
 }

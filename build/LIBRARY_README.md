@@ -83,13 +83,6 @@ Options:
 
 OneFileLinux supports multiple build profiles (minimal, standard, full) that control which features are included in the final EFI file.
 
-### Official Profile Management API
-
-The proper way to work with build profiles is through these functions in `83_config_helper.sh`:
-
-1. `set_active_build_profile <profile_name>` - Sets the active profile and persists it
-2. `get_active_build_profile` - Retrieves the current active profile
-
 ### Profile Determination Flow
 
 Profiles are determined in the following order of precedence:

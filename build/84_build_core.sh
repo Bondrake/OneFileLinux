@@ -373,17 +373,20 @@ create_efi() {
         }
     fi
     
-    # Determine the appropriate filename suffix based on build profile
+    # Determine the appropriate filename suffix based on BUILD_TYPE
     local profile_name="standard"
     
-    # Get the active build profile using the official API
-    if type -t get_active_build_profile &>/dev/null; then
-        profile_name=$(get_active_build_profile)
-        log "INFO" "Using active build profile for EFI filename: $profile_name"
-    elif type -t get_build_profile_name &>/dev/null; then
-        # Fallback to detection if the function is available
-        profile_name=$(get_build_profile_name)
-        log "INFO" "Detected build profile for EFI filename: $profile_name"
+    # Use BUILD_TYPE if set
+    if [ -n "${BUILD_TYPE:-}" ]; then
+        profile_name="${BUILD_TYPE}"
+        log "INFO" "Using BUILD_TYPE for EFI filename: $profile_name"
+    # Otherwise try to determine from feature flags
+    elif [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ]; then
+        profile_name="minimal"
+        log "INFO" "Detected minimal profile from feature flags"
+    elif [ "${INCLUDE_BTRFS:-false}" = "true" ] && [ "${INCLUDE_ZFS:-true}" = "true" ]; then
+        profile_name="full"
+        log "INFO" "Detected full profile from feature flags"
     fi
     
     # Create the EFI filename using the profile name
@@ -612,17 +615,6 @@ parse_build_args() {
     INCLUDE_COMPRESSION="${INCLUDE_COMPRESSION:-true}"
     COMPRESSION_TOOL="${COMPRESSION_TOOL:-upx}"
     
-    # If INCLUDE_MINIMAL_KERNEL is true but BUILD_TYPE isn't already minimal, set it
-    if [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ] && [ "${BUILD_TYPE:-}" != "minimal" ]; then
-        log "INFO" "INCLUDE_MINIMAL_KERNEL is true, setting BUILD_TYPE=minimal"
-        BUILD_TYPE="minimal"
-        
-        # Use canonical profile management API if available
-        if type -t set_active_build_profile &>/dev/null; then
-            set_active_build_profile "minimal"
-        fi
-    fi
-    
     # Build performance options
     USE_CACHE="${USE_CACHE:-false}"
     USE_SWAP="${USE_SWAP:-false}"
@@ -640,8 +632,8 @@ parse_build_args() {
                 INCLUDE_CRYPTO=false
                 INCLUDE_TUI=false
                 INCLUDE_MINIMAL_KERNEL=true
-                # Set the active profile explicitly
-                set_active_build_profile "minimal"
+                # Set the BUILD_TYPE directly
+                export BUILD_TYPE="minimal"
                 shift
                 ;;
             --full)
@@ -653,8 +645,8 @@ parse_build_args() {
                 INCLUDE_CRYPTO=true
                 INCLUDE_TUI=true
                 INCLUDE_MINIMAL_KERNEL=false
-                # Set the active profile explicitly
-                set_active_build_profile "full"
+                # Set the BUILD_TYPE directly
+                export BUILD_TYPE="full"
                 shift
                 ;;
             --minimal-kernel)
