@@ -46,9 +46,6 @@ usage() {
     echo "  -i, --interactive     Run in interactive mode (shell inside container)"
     echo "  -p, --pull            Pull the latest base image before building"
     echo "  --no-cache            Build the Docker image without using cache"
-    echo "  --max-resources       Use maximum available system resources"
-    echo "  --balanced-resources  Use balanced system resources (default)"
-    echo "  --min-resources       Use minimal system resources"
     echo "  --make-verbose        Enable verbose make output (V=1)"
     echo "  --make-quiet          Use quiet make output (V=0, default)"
     echo ""
@@ -108,18 +105,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-cache)
             NO_CACHE=true
-            shift
-            ;;
-        --max-resources)
-            RESOURCES="max"
-            shift
-            ;;
-        --balanced-resources)
-            RESOURCES="balanced"
-            shift
-            ;;
-        --min-resources)
-            RESOURCES="min"
             shift
             ;;
         --make-verbose)
@@ -187,32 +172,10 @@ chmod +x "$SCRIPT_DIR/auto-resources.sh"
 
 # Determine resource allocation based on selected profile
 echo -e "${BLUE}[INFO]${NC} Detecting system resources..."
-case $RESOURCES in
-    max)
-        # Leave minimal resources for the host
-        source "$SCRIPT_DIR/auto-resources.sh" --env > /dev/null
-        # Override default resource limits with detected values
-        MIN_FREE_MEM_GB=2
-        MIN_FREE_CPUS=1
-        # Calculate with minimal reserves - memory is already in g format (like "16g")
-        MEMORY_VALUE=$(echo $DOCKER_MEMORY | sed 's/g//')
-        AVAIL_MEM_GB=$((MEMORY_VALUE - MIN_FREE_MEM_GB))
-        DOCKER_MEMORY="${AVAIL_MEM_GB}g"
-        echo -e "${BLUE}[INFO]${NC} Using maximum available resources: $DOCKER_MEMORY RAM, $DOCKER_CPUS CPU cores"
-        ;;
-    balanced)
-        # Default balanced mode
-        source "$SCRIPT_DIR/auto-resources.sh" --env > /dev/null
-        echo -e "${BLUE}[INFO]${NC} Using balanced resources: $DOCKER_MEMORY RAM, $DOCKER_CPUS CPU cores"
-        ;;
-    min)
-        # Minimal resource usage
-        export DOCKER_MEMORY="4g"
-        export DOCKER_CPUS="2"
-        export BUILD_FLAGS="--jobs=2 --use-swap"
-        echo -e "${BLUE}[INFO]${NC} Using minimal resources: $DOCKER_MEMORY RAM, $DOCKER_CPUS CPU cores"
-        ;;
-esac
+
+# Get the resources from auto-resources.sh
+source "$SCRIPT_DIR/auto-resources.sh" --env > /dev/null
+echo -e "${BLUE}[INFO]${NC} Using detected available resources: $DOCKER_MEMORY RAM, $DOCKER_CPUS CPU cores"
 
 # Append resource flags to build arguments if not already specified
 if [[ "$BUILD_ARGS" != *"--jobs="* ]] && [[ -n "$BUILD_FLAGS" ]]; then

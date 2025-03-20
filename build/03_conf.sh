@@ -19,95 +19,25 @@ source_libraries "."
 # Initialize script with standard header (prints banner)
 initialize_script
 
-# Check if we should resume from a checkpoint
-check_resume_point "$1"
-
 # Start timing for configuration
 start_timing "03_conf: System services"
 
 # Configure system services for sysinit runlevel
 log "INFO" "Setting up system services in sysinit runlevel"
 
-# Define a function to create service symlinks using various methods
-create_service_symlinks() {
-    local target_dir="./alpine-minirootfs/etc/runlevels/sysinit"
-    
-    # Try to create using direct methods first
-    if mkdir -p "$target_dir" 2>/dev/null; then
-        log "INFO" "Created runlevels directory"
-        
-        # Try to set permissions but continue if it fails
-        chmod 777 "$target_dir" 2>/dev/null || log "WARNING" "Could not set permissions on $target_dir"
-        
-        # Create symlinks - continue even if some fail
-        ln -fs /etc/init.d/mdev "$target_dir/mdev" 2>/dev/null
-        ln -fs /etc/init.d/devfs "$target_dir/devfs" 2>/dev/null
-        ln -fs /etc/init.d/dmesg "$target_dir/dmesg" 2>/dev/null
-        ln -fs /etc/init.d/syslog "$target_dir/syslog" 2>/dev/null
-        ln -fs /etc/init.d/hwdrivers "$target_dir/hwdrivers" 2>/dev/null
-        ln -fs /etc/init.d/networking "$target_dir/networking" 2>/dev/null
-        
-        # Check if at least some symlinks were created
-        if ls -la "$target_dir"/* >/dev/null 2>&1; then
-            log "SUCCESS" "Created service symlinks"
-            return 0
-        fi
-    fi
-    
-    # If direct method failed, try alternative approaches
-    log "WARNING" "Direct symlink creation failed, trying alternatives"
-    
-    # Try using touch to create empty files instead of symlinks
-    if mkdir -p "$target_dir" 2>/dev/null; then
-        # Create empty files in place of symlinks
-        touch "$target_dir/mdev" "$target_dir/devfs" "$target_dir/dmesg" \
-              "$target_dir/syslog" "$target_dir/hwdrivers" "$target_dir/networking" 2>/dev/null
-        
-        log "WARNING" "Created placeholder files instead of symlinks"
-        return 0
-    fi
-    
-    # Alternative: Create a file with the list of services to be added later
-    log "WARNING" "Could not create runlevels directory, creating services list file"
-    echo "mdev devfs dmesg syslog hwdrivers networking" > "./alpine-minirootfs/services.txt" 2>/dev/null
-    
-    return 0  # Continue build even if we couldn't create symlinks
-}
+# Create runlevels directory and set permissions
+mkdir -p ./alpine-minirootfs/etc/runlevels/sysinit
+chmod 777 ./alpine-minirootfs/etc/runlevels/sysinit
 
-# Check if running in container and apply special handling
-if [ "${IN_DOCKER_CONTAINER}" = "true" ] || grep -q "docker\|container" /proc/1/cgroup 2>/dev/null || [ -f "/.dockerenv" ]; then
-    log "INFO" "Running in container, using special permissions handling"
-    
-    # First attempt: Try with sudo if available
-    if command -v sudo &> /dev/null; then
-        log "INFO" "Using sudo for service setup"
-        sudo mkdir -p ./alpine-minirootfs/etc/runlevels/sysinit 2>/dev/null
-        sudo chmod 777 ./alpine-minirootfs/etc/runlevels/sysinit 2>/dev/null
-        sudo ln -fs /etc/init.d/mdev ./alpine-minirootfs/etc/runlevels/sysinit/mdev 2>/dev/null
-        sudo ln -fs /etc/init.d/devfs ./alpine-minirootfs/etc/runlevels/sysinit/devfs 2>/dev/null
-        sudo ln -fs /etc/init.d/dmesg ./alpine-minirootfs/etc/runlevels/sysinit/dmesg 2>/dev/null
-        sudo ln -fs /etc/init.d/syslog ./alpine-minirootfs/etc/runlevels/sysinit/syslog 2>/dev/null
-        sudo ln -fs /etc/init.d/hwdrivers ./alpine-minirootfs/etc/runlevels/sysinit/hwdrivers 2>/dev/null
-        sudo ln -fs /etc/init.d/networking ./alpine-minirootfs/etc/runlevels/sysinit/networking 2>/dev/null
-        
-        # Check if at least some files were created
-        if ! ls -la ./alpine-minirootfs/etc/runlevels/sysinit/* >/dev/null 2>&1; then
-            log "WARNING" "Sudo method failed, trying alternative methods"
-            create_service_symlinks
-        fi
-    else
-        # No sudo available, try direct method
-        log "INFO" "Sudo not available, trying alternative methods"
-        create_service_symlinks
-    fi
-else
-    # Regular environment - use standard method
-    log "INFO" "Using standard method for service setup"
-    create_service_symlinks
-fi
+# Create service symlinks
+ln -fs /etc/init.d/mdev ./alpine-minirootfs/etc/runlevels/sysinit/mdev
+ln -fs /etc/init.d/devfs ./alpine-minirootfs/etc/runlevels/sysinit/devfs
+ln -fs /etc/init.d/dmesg ./alpine-minirootfs/etc/runlevels/sysinit/dmesg
+ln -fs /etc/init.d/syslog ./alpine-minirootfs/etc/runlevels/sysinit/syslog
+ln -fs /etc/init.d/hwdrivers ./alpine-minirootfs/etc/runlevels/sysinit/hwdrivers
+ln -fs /etc/init.d/networking ./alpine-minirootfs/etc/runlevels/sysinit/networking
 
-# Continue even if symlinks couldn't be created perfectly - we can fix later
-log "SUCCESS" "System services configured (possibly with fallbacks)"
+log "SUCCESS" "System services configured"
 
 # Set up terminal access
 log "INFO" "Setting up terminal access"
@@ -204,17 +134,6 @@ sed -i 's/^#ttyS0/ttyS0/' ./alpine-minirootfs/etc/inittab
 # Enable root login on all local consoles
 sed -i 's|\(/sbin/getty \)|\1 -a root |' ./alpine-minirootfs/etc/inittab
 log "SUCCESS" "Console settings configured"
-
-# Legacy commented code preserved for reference
-#mv ./alpine-minirootfs/etc/profile.d/color_prompt ./alpine-minirootfs/etc/profile.d/color_prompt.sh
-#mv ./alpine-minirootfs/etc/profile.d/locale ./alpine-minirootfs/etc/profile.d/locale.sh
-#chmod +x ./alpine-minirootfs/etc/profile.d/*.sh
-#mkdir ./alpine-minirootfs/media/ubuntu
-#cat > ./alpine-minirootfs/etc/fstab << EOF
-#/dev/cdrom	/media/cdrom	iso9660	noauto,ro 0 0
-#/dev/usbdisk	/media/usb	vfat	noauto,ro 0 0
-#/dev/sda5	/media/ubuntu	ext4	rw,relatime 0 0
-#EOF
 
 end_timing
 

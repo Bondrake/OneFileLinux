@@ -49,7 +49,7 @@ download_alpine_config() {
     for url in "${urls[@]}"; do
         log "INFO" "Trying to download from: $url"
         
-        # Use wget if available, otherwise curl
+        # Use wget for downloading
         if command -v wget > /dev/null; then
             # Use verbose output for debugging during first attempt
             if [ "$url" = "$config_url" ]; then
@@ -67,25 +67,8 @@ download_alpine_config() {
             else
                 log "ERROR" "wget download from $url produced empty file or failed"
             fi
-        elif command -v curl > /dev/null; then
-            # Use verbose output for debugging during first attempt
-            if [ "$url" = "$config_url" ]; then
-                log "INFO" "First download attempt, using verbose output for curl"
-                curl -v --connect-timeout 30 --retry 3 -o "$output_file" "$url" || log "ERROR" "curl failed with exit code $?"
-            else
-                curl -s --connect-timeout 30 --retry 3 -o "$output_file" "$url" || log "ERROR" "curl failed with exit code $?"
-            fi
-            
-            # Check if the download produced a valid file
-            if [ -s "$output_file" ]; then
-                download_success=true
-                log "SUCCESS" "Downloaded using curl from $url"
-                break
-            else
-                log "ERROR" "curl download from $url produced empty file or failed"
-            fi
         else
-            log "ERROR" "Neither wget nor curl is available. Please install one of them."
+            log "ERROR" "wget is not available. Please install wget."
             return 1
         fi
     done

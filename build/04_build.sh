@@ -35,12 +35,11 @@ initialize_script
 BUILD_DIR="$SCRIPT_DIR"
 ROOTFS_DIR="$BUILD_DIR/alpine-minirootfs"
 KERNEL_DIR="$BUILD_DIR/linux"
-ZFS_DIR="$BUILD_DIR/zfs"
 ZFILES_DIR="$BUILD_DIR/zfiles"
 OUTPUT_DIR="$BUILD_DIR/../output"
 
 # Export paths for use by the build_core library functions
-export BUILD_DIR ROOTFS_DIR KERNEL_DIR ZFS_DIR ZFILES_DIR OUTPUT_DIR
+export BUILD_DIR ROOTFS_DIR KERNEL_DIR ZFILES_DIR OUTPUT_DIR
 
 # Ensure output directory exists
 mkdir -p "$OUTPUT_DIR"

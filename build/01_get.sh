@@ -74,8 +74,8 @@ download_file() {
     
     log "INFO" "Downloading $component from $url"
     
-    # Skip download if file already exists and --resume flag is used
-    if [ "$RESUME_MODE" = true ] && [ -f "$file" ]; then
+    # Skip download if file already exists
+    if [ -f "$file" ]; then
         log "INFO" "File $file already exists, skipping download"
     else
         wget -c4 "$url" || {
@@ -374,9 +374,6 @@ main() {
     # Initialize script with standard header (prints banner)
     initialize_script
     
-    # Check if we should resume from a checkpoint
-    check_resume_point "$1"
-
     # Step 1: Download and extract Alpine Linux
     start_timing "01_get: Alpine Linux"
     log "INFO" "Step 1: Getting Alpine Linux minirootfs"
@@ -427,10 +424,8 @@ main() {
 
     # Step 3: OpenZFS is now handled via Alpine packages
     if [ "${INCLUDE_ZFS:-true}" = "true" ]; then
-        start_timing "01_get: OpenZFS"
         log "INFO" "Step 3: Using Alpine ZFS packages instead of building from source"
         log "INFO" "Skipping OpenZFS source download and extraction"
-        end_timing
     else
         log "INFO" "Step 3: Skipping OpenZFS (disabled in configuration)"
     fi

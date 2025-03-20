@@ -1,0 +1,15 @@
+# Exclude Docker-specific files
+README*.md
+.env
+.env.example
+docker-compose.yml
+auto-resources.sh
+build-onefilelinux.sh
+build-container-image.sh
+.git*
+
+# Exclude unnecessary files when building prebuilt container
+!../build/*.sh
+!../build/tools/
+!../build/zfiles/
+!../build/kernel-configs/

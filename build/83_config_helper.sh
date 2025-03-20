@@ -298,6 +298,25 @@ get_active_build_profile() {
     return 0
 }
 
+# Generate a password hash for /etc/shadow
+create_password_hash() {
+    local password="$1"
+    
+    # Method 1: Using OpenSSL (Linux, macOS)
+    if command -v openssl &> /dev/null; then
+        local hash=$(openssl passwd -6 "$password")
+        echo "$hash"
+    # Method 2: Using mkpasswd (many Linux distros)
+    elif command -v mkpasswd &> /dev/null; then
+        local hash=$(mkpasswd -m sha-512 "$password")
+        echo "$hash"
+    # Method 3: Failed to hash
+    else
+        log "ERROR" "No password hashing tool available (openssl or mkpasswd required)"
+        echo "ERROR"
+    fi
+}
+
 # Export all functions
 export -f load_config
 export -f save_config
@@ -307,3 +326,4 @@ export -f generate_module_env
 export -f setup_cache
 export -f set_active_build_profile
 export -f get_active_build_profile
+export -f create_password_hash

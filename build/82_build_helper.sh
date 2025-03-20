@@ -72,234 +72,9 @@ ensure_directory() {
     
     if [ ! -d "$dir" ]; then
         echo "Creating directory: $dir"
-        if is_restricted_environment; then
-            mkdir -p "$dir" 2>/dev/null || sudo mkdir -p "$dir"
-            chmod "$mode" "$dir" 2>/dev/null || sudo chmod "$mode" "$dir"
-        else
-            mkdir -p "$dir"
-            chmod "$mode" "$dir"
-        fi
+        mkdir -p "$dir"
+        chmod "$mode" "$dir"
     fi
-}
-
-# Extract archive with environment awareness and performance optimizations
-extract_archive() {
-    local archive=$1
-    local target=$2
-    local strip_components=${3:-0}
-    local skip_ownership=${4:-false}  # Skip the slow chmod operations
-    
-    if [ ! -f "$archive" ]; then
-        echo "Error: Archive not found: $archive"
-        return 1
-    fi
-    
-    ensure_directory "$target"
-    
-    echo "Extracting $archive to $target"
-    
-    # Use optimized extraction based on environment and file type
-    if is_docker_container; then
-        echo "Detected container environment, using accelerated extraction"
-        
-        # Use different strategies based on file type
-        case "$archive" in
-            *.tar.gz|*.tgz)
-                if [ $strip_components -gt 0 ]; then
-                    # Use pigz if available for parallel decompression
-                    if command -v pigz > /dev/null; then
-                        echo "Using pigz for parallel decompression"
-                        pigz -dc "$archive" | tar -x -C "$target" --strip-components=$strip_components
-                    else
-                        # Use direct extraction with tar
-                        tar -xzf "$archive" -C "$target" --strip-components=$strip_components --no-same-owner
-                    fi
-                else
-                    # Use pigz if available for parallel decompression
-                    if command -v pigz > /dev/null; then
-                        echo "Using pigz for parallel decompression"
-                        pigz -dc "$archive" | tar -x -C "$target" --no-same-owner
-                    else
-                        # Use direct extraction with tar
-                        tar -xzf "$archive" -C "$target" --no-same-owner
-                    fi
-                fi
-                ;;
-                
-            *.tar.xz)
-                if [ $strip_components -gt 0 ]; then
-                    # Use xz with parallel decompression if available
-                    XZ_OPT="-T0" tar -xJf "$archive" -C "$target" --strip-components=$strip_components --no-same-owner
-                else
-                    # Use xz with parallel decompression if available
-                    XZ_OPT="-T0" tar -xJf "$archive" -C "$target" --no-same-owner
-                fi
-                ;;
-                
-            *.zip)
-                unzip -o "$archive" -d "$target"
-                ;;
-                
-            *)
-                echo "Unsupported archive format: $archive"
-                return 1
-                ;;
-        esac
-        
-        # If explicitly requested to skip ownership changes
-        if [ "$skip_ownership" != "true" ]; then
-            # Fix permissions only for critical files that need execution
-            find "$target" -name "*.sh" -type f -exec chmod +x {} \; 2>/dev/null || true
-            
-            # For kernel extraction, we don't need ownership changes which are slow
-            # Just ensure build scripts are executable
-            if [[ "$archive" == *"linux"*".tar."* ]]; then
-                echo "Optimizing permissions for kernel source"
-                
-                # Make important kernel build files executable for compilation
-                if [ -f "$target/Makefile" ]; then
-                    chmod +x "$target/Makefile"
-                fi
-                
-                # Make script directories executable
-                for dir in scripts tools; do
-                    if [ -d "$target/$dir" ]; then
-                        find "$target/$dir" -name "*.sh" -type f -exec chmod +x {} \; 2>/dev/null || true
-                    fi
-                done
-            else
-                # Only set ownership for small archives, skip for large ones like kernel
-                echo "Setting ownership for extracted files"
-                chown -R $(id -u):$(id -g) "$target"
-            fi
-        fi
-        
-    elif is_restricted_environment; then
-        # GitHub Actions or other restricted environment
-        case "$archive" in
-            *.tar.gz|*.tgz)
-                if [ $strip_components -gt 0 ]; then
-                    sudo tar -xzf "$archive" -C "$target" --strip-components=$strip_components
-                else
-                    sudo tar -xzf "$archive" -C "$target"
-                fi
-                if [ "$skip_ownership" != "true" ]; then
-                    sudo chown -R $(id -u):$(id -g) "$target"
-                fi
-                ;;
-                
-            *.tar.xz)
-                if [ $strip_components -gt 0 ]; then
-                    XZ_OPT="-T0" sudo tar -xJf "$archive" -C "$target" --strip-components=$strip_components
-                else
-                    XZ_OPT="-T0" sudo tar -xJf "$archive" -C "$target"
-                fi
-                if [ "$skip_ownership" != "true" ]; then
-                    sudo chown -R $(id -u):$(id -g) "$target"
-                fi
-                ;;
-                
-            *.zip)
-                unzip -o "$archive" -d "$target"
-                ;;
-                
-            *)
-                echo "Unsupported archive format: $archive"
-                return 1
-                ;;
-        esac
-    else
-        # Standard environment
-        case "$archive" in
-            *.tar.gz|*.tgz)
-                if [ $strip_components -gt 0 ]; then
-                    tar -xzf "$archive" -C "$target" --strip-components=$strip_components
-                else
-                    tar -xzf "$archive" -C "$target"
-                fi
-                ;;
-                
-            *.tar.xz)
-                if [ $strip_components -gt 0 ]; then
-                    XZ_OPT="-T0" tar -xJf "$archive" -C "$target" --strip-components=$strip_components
-                else
-                    XZ_OPT="-T0" tar -xJf "$archive" -C "$target"
-                fi
-                ;;
-                
-            *.zip)
-                unzip -o "$archive" -d "$target"
-                ;;
-                
-            *)
-                echo "Unsupported archive format: $archive"
-                return 1
-                ;;
-        esac
-    fi
-    
-    echo "Extraction completed successfully"
-    return 0
-}
-
-# Copy files with environment awareness
-safe_copy() {
-    local src=$1
-    local dest=$2
-    local mode=${3:-644}
-    
-    if [ ! -f "$src" ]; then
-        echo "Warning: Source file not found: $src"
-        return 1
-    fi
-    
-    echo "Copying $src to $dest"
-    
-    if is_restricted_environment; then
-        # Create the destination directory if needed
-        local dest_dir=$(dirname "$dest")
-        ensure_directory "$dest_dir"
-        
-        # Copy and set permissions
-        sudo cp "$src" "$dest"
-        sudo chmod "$mode" "$dest"
-    else
-        # Create the destination directory if needed
-        local dest_dir=$(dirname "$dest")
-        ensure_directory "$dest_dir"
-        
-        # Copy and set permissions
-        cp "$src" "$dest"
-        chmod "$mode" "$dest"
-    fi
-    
-    return $?
-}
-
-# Create symlinks with environment awareness
-safe_symlink() {
-    local target=$1
-    local link_name=$2
-    
-    echo "Creating symlink: $link_name -> $target"
-    
-    if is_restricted_environment; then
-        # Create the destination directory if needed
-        local link_dir=$(dirname "$link_name")
-        ensure_directory "$link_dir"
-        
-        # Create the symlink
-        sudo ln -sf "$target" "$link_name" 2>/dev/null || ln -sf "$target" "$link_name"
-    else
-        # Create the destination directory if needed
-        local link_dir=$(dirname "$link_name")
-        ensure_directory "$link_dir"
-        
-        # Create the symlink
-        ln -sf "$target" "$link_name"
-    fi
-    
-    return $?
 }
 
 # Configure Alpine Linux with proper error handling
@@ -313,55 +88,60 @@ configure_alpine() {
     fi
     
     # Create runlevel directories with proper permissions
-    ensure_directory "$rootfs_dir/etc/runlevels/sysinit" "777"
+    mkdir -p "$rootfs_dir/etc/runlevels/sysinit"
+    chmod 777 "$rootfs_dir/etc/runlevels/sysinit"
     
     # Create service symlinks
     for service in mdev devfs dmesg syslog hwdrivers networking; do
-        safe_symlink "/etc/init.d/$service" "$rootfs_dir/etc/runlevels/sysinit/$service"
+        ln -sf "/etc/init.d/$service" "$rootfs_dir/etc/runlevels/sysinit/$service"
     done
     
     # Set up terminal access
-    safe_symlink "/sbin/agetty" "$rootfs_dir/sbin/getty"
+    ln -sf "/sbin/agetty" "$rootfs_dir/sbin/getty"
     
     # Copy configuration files if zfiles directory exists
     if [ -d "$zfiles_dir" ]; then
         # Create network directory
-        ensure_directory "$rootfs_dir/etc/network"
+        mkdir -p "$rootfs_dir/etc/network"
         
         # Copy files if they exist
         if [ -f "$zfiles_dir/interfaces" ]; then
-            safe_copy "$zfiles_dir/interfaces" "$rootfs_dir/etc/network/interfaces"
+            cp "$zfiles_dir/interfaces" "$rootfs_dir/etc/network/interfaces"
+            chmod 644 "$rootfs_dir/etc/network/interfaces"
         else
             echo "Creating default interfaces file"
-            echo "auto lo" > "/tmp/interfaces.tmp"
-            echo "iface lo inet loopback" >> "/tmp/interfaces.tmp"
-            safe_copy "/tmp/interfaces.tmp" "$rootfs_dir/etc/network/interfaces"
-            rm "/tmp/interfaces.tmp"
+            echo "auto lo" > "$rootfs_dir/etc/network/interfaces"
+            echo "iface lo inet loopback" >> "$rootfs_dir/etc/network/interfaces"
+            chmod 644 "$rootfs_dir/etc/network/interfaces"
         fi
         
         if [ -f "$zfiles_dir/resolv.conf" ]; then
-            safe_copy "$zfiles_dir/resolv.conf" "$rootfs_dir/etc/resolv.conf"
+            cp "$zfiles_dir/resolv.conf" "$rootfs_dir/etc/resolv.conf"
+            chmod 644 "$rootfs_dir/etc/resolv.conf"
         else
             echo "Creating default resolv.conf"
-            echo "nameserver 8.8.8.8" > "/tmp/resolv.conf.tmp"
-            safe_copy "/tmp/resolv.conf.tmp" "$rootfs_dir/etc/resolv.conf"
-            rm "/tmp/resolv.conf.tmp"
+            echo "nameserver 8.8.8.8" > "$rootfs_dir/etc/resolv.conf"
+            chmod 644 "$rootfs_dir/etc/resolv.conf"
         fi
         
         if [ -f "$zfiles_dir/profile" ]; then
-            safe_copy "$zfiles_dir/profile" "$rootfs_dir/etc/profile"
+            cp "$zfiles_dir/profile" "$rootfs_dir/etc/profile"
+            chmod 644 "$rootfs_dir/etc/profile"
         fi
         
         if [ -f "$zfiles_dir/shadow" ]; then
-            safe_copy "$zfiles_dir/shadow" "$rootfs_dir/etc/shadow"
+            cp "$zfiles_dir/shadow" "$rootfs_dir/etc/shadow"
+            chmod 644 "$rootfs_dir/etc/shadow"
         fi
         
         if [ -f "$zfiles_dir/init" ]; then
-            safe_copy "$zfiles_dir/init" "$rootfs_dir/init" "755"
+            cp "$zfiles_dir/init" "$rootfs_dir/init"
+            chmod 755 "$rootfs_dir/init"
         fi
         
         if [ -f "$zfiles_dir/onefilelinux-tui" ]; then
-            safe_copy "$zfiles_dir/onefilelinux-tui" "$rootfs_dir/onefilelinux-tui" "755"
+            cp "$zfiles_dir/onefilelinux-tui" "$rootfs_dir/onefilelinux-tui"
+            chmod 755 "$rootfs_dir/onefilelinux-tui"
         fi
     else
         echo "Warning: zfiles directory not found: $zfiles_dir"
@@ -369,13 +149,8 @@ configure_alpine() {
     
     # Configure console settings if inittab exists
     if [ -f "$rootfs_dir/etc/inittab" ]; then
-        if is_restricted_environment; then
-            sudo sed -i 's/^#ttyS0/ttyS0/' "$rootfs_dir/etc/inittab"
-            sudo sed -i 's|\(/sbin/getty \)|\1 -a root |' "$rootfs_dir/etc/inittab"
-        else
-            sed -i 's/^#ttyS0/ttyS0/' "$rootfs_dir/etc/inittab"
-            sed -i 's|\(/sbin/getty \)|\1 -a root |' "$rootfs_dir/etc/inittab"
-        fi
+        sed -i 's/^#ttyS0/ttyS0/' "$rootfs_dir/etc/inittab"
+        sed -i 's|\(/sbin/getty \)|\1 -a root |' "$rootfs_dir/etc/inittab"
     fi
     
     return 0
@@ -422,13 +197,13 @@ setup_kernel_config() {
         
         if [ "$use_overlay" = "true" ] && [ -f "$base_config" ]; then
             echo "Copying base config from overlay system: $base_config"
-            safe_copy "$base_config" "$kernel_dir/.config"
+            cp "$base_config" "$kernel_dir/.config"
         elif [ "$config_type" = "minimal" ] && [ -f "$zfiles_dir/kernel-minimal.config" ]; then
             echo "Copying minimal kernel config from zfiles (legacy)"
-            safe_copy "$zfiles_dir/kernel-minimal.config" "$kernel_dir/.config"
+            cp "$zfiles_dir/kernel-minimal.config" "$kernel_dir/.config"
         elif [ -f "$zfiles_dir/.config" ]; then
             echo "Copying standard kernel config from zfiles (legacy)"
-            safe_copy "$zfiles_dir/.config" "$kernel_dir/.config"
+            cp "$zfiles_dir/.config" "$kernel_dir/.config"
         else
             echo "No config found in zfiles, creating default config"
             # Create a minimal kernel config
@@ -466,7 +241,7 @@ CONFIG_USB_STORAGE=y
 CONFIG_EXT4_FS=y
 CONFIG_CRYPTO=y
 EOF
-            safe_copy "/tmp/minimal.config" "$kernel_dir/.config"
+            cp "/tmp/minimal.config" "$kernel_dir/.config"
             rm "/tmp/minimal.config"
         fi
         
@@ -480,21 +255,13 @@ EOF
                 # Apply ZFS support configs if explicitly enabled
                 if [ "${INCLUDE_ZFS:-true}" = "true" ] && [ -f "$feature_dir/zfs-support.conf" ]; then
                     echo "- Applying ZFS support config"
-                    if is_restricted_environment; then
-                        cat "$feature_dir/zfs-support.conf" | sudo tee -a "$kernel_dir/.config" > /dev/null
-                    else
-                        cat "$feature_dir/zfs-support.conf" >> "$kernel_dir/.config"
-                    fi
+                    cat "$feature_dir/zfs-support.conf" >> "$kernel_dir/.config"
                 fi
             fi
         fi
         
         # Run olddefconfig to ensure the config is valid
-        if is_restricted_environment; then
-            (cd "$kernel_dir" && make olddefconfig)
-        else
-            (cd "$kernel_dir" && make olddefconfig)
-        fi
+        (cd "$kernel_dir" && make olddefconfig)
     fi
     
     return 0
@@ -673,7 +440,6 @@ docker_handle_extraction() {
     # Create temporary extraction directory
     local temp_extract_dir="/tmp/onefilelinux_extract_temp"
     mkdir -p "$temp_extract_dir"
-    chmod 777 "$temp_extract_dir" 2>/dev/null || true
     
     # Create destination directory first
     mkdir -p "$dest_dir"
@@ -691,7 +457,7 @@ docker_handle_extraction() {
         log "WARNING" "Initial extraction failed, trying alternative method"
         # Try using tar with xf directly
         if [[ "$src_file" == *.tar.xz ]]; then
-            tar -xf "$src_file" -C "$temp_extract_dir" --no-same-owner
+            tar -xf "$src_file" -C "$temp_extract_dir"
         fi
     fi
     
@@ -706,9 +472,6 @@ docker_handle_extraction() {
     
     # Clean up
     rm -rf "$temp_extract_dir"/*
-    
-    # Set permissions if possible
-    chmod -R 755 "$dest_dir" 2>/dev/null || true
     
     # Verify final directory has content
     if [ -z "$(ls -A "$dest_dir")" ]; then
@@ -732,12 +495,12 @@ prepare_alpine_minirootfs() {
     log "INFO" "Preparing Alpine minirootfs for Docker environment"
     
     # Ensure permissions allow writing to all subdirectories
-    find "$rootfs_dir" -type d -exec chmod 755 {} \; 2>/dev/null || true
+    find "$rootfs_dir" -type d -exec chmod 755 {} \;
     
     # Make sure root-owned directories are writable by all users
     # This is necessary for the build scripts to create symlinks
     mkdir -p "$rootfs_dir/etc/runlevels/sysinit"
-    chmod -R 777 "$rootfs_dir/etc/runlevels" 2>/dev/null || true
+    chmod -R 777 "$rootfs_dir/etc/runlevels"
     
     log "SUCCESS" "Set proper permissions on Alpine minirootfs"
     return 0
@@ -760,7 +523,7 @@ prepare_chroot() {
     log "INFO" "Preparing chroot environment: $chroot_dir"
     
     # Create essential directories
-    mkdir -p "$chroot_dir/proc" "$chroot_dir/sys" "$chroot_dir/dev" "$chroot_dir/dev/pts" 2>/dev/null || true
+    mkdir -p "$chroot_dir/proc" "$chroot_dir/sys" "$chroot_dir/dev" "$chroot_dir/dev/pts"
     
     # Check if we're running in a Docker container
     if is_docker_container; then
@@ -773,9 +536,9 @@ prepare_chroot() {
         fi
         
         # Set safe permissions on special directories
-        chmod 555 "$chroot_dir/proc" 2>/dev/null || true
+        chmod 555 "$chroot_dir/proc"
         if [ -d "$chroot_dir/var/empty" ]; then
-            chmod 555 "$chroot_dir/var/empty" 2>/dev/null || true
+            chmod 555 "$chroot_dir/var/empty"
         fi
     else
         # Standard non-Docker environment
@@ -1343,7 +1106,6 @@ handle_kernel_permissions() {
     return 0
 }
 
-export -f extract_archive
 export -f safe_copy
 export -f safe_symlink
 export -f configure_alpine

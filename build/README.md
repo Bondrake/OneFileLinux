@@ -52,9 +52,6 @@ For a comprehensive list of build options, see the [User Guide](../docs/USER_GUI
 ## Advanced Usage
 
 ```bash
-# Resume from last successful step
-./build.sh -r
-
 # Build with verbose output
 ./build.sh -v
 

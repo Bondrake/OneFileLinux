@@ -15,7 +15,6 @@ NC='\033[0m' # No Color
 # Version information
 ALPINE_VERSION="3.21"      # Alpine Linux version to use
 KERNEL_VERSION="6.12.19"   # Linux kernel version
-ZFS_VERSION="2.3.0"        # ZFS version
 
 # Log file for build errors
 BUILD_LOG="build_error.log"
@@ -66,6 +65,13 @@ print_banner() {
     echo "  |_______________| "
     echo "                    "
     echo -e "${GREEN}   OneFileLinux: $script_name  ${NC}"
+    echo "----------------------------------------------------"
+}
+
+# Function to print script end
+print_script_end() {
+    echo "----------------------------------------------------"
+    log "SUCCESS" "$SCRIPT_NAME completed successfully"
     echo "----------------------------------------------------"
 }
 

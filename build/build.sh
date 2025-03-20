@@ -8,7 +8,6 @@
 CLEAN_START=false
 VERBOSE=false
 SKIP_PREPARE=false
-RESUME=false
 CLEAN_END=false
 BUILD_STEP=""
 
@@ -101,7 +100,6 @@ usage() {
     echo "  -c, --clean-start   Run cleanup script before starting (removes previous builds)"
     echo "  -v, --verbose       Enable verbose output"
     echo "  -s, --skip-prepare  Skip environment preparation step"
-    echo "  -r, --resume        Resume from last successful step (if possible)"
     echo "  -C, --clean-end     Run cleanup script after successful build"
     echo ""
     echo "Steps:"
@@ -121,7 +119,6 @@ usage() {
     echo "Examples:"
     echo "  $0                  Run all build steps"
     echo "  $0 -c all           Clean, then run all build steps"
-    echo "  $0 -r               Resume build from last successful step"
     echo "  $0 get              Run only the download step"
     echo "  $0 all -- --minimal --without-zfs     Run all steps and pass arguments to 04_build.sh"
     echo "  $0 build -- --minimal --without-zfs   Run only build step with custom arguments"
@@ -398,10 +395,6 @@ process_args() {
                 ;;
             -s|--skip-prepare)
                 SKIP_PREPARE=true
-                shift
-                ;;
-            -r|--resume)
-                RESUME=true
                 shift
                 ;;
             -C|--clean-end)
@@ -913,12 +906,6 @@ execute_step() {
         exit 1
     fi
     
-    # Add resume flag if required (but not for build step when we have passthrough args)
-    local args=""
-    if [ "$RESUME" = true ] && [ "${#step_args[@]}" -eq 0 ]; then
-        args="--resume"
-    fi
-    
     # Add verbose flag if required
     if [ "$VERBOSE" = true ]; then
         export VERBOSE=true
@@ -976,11 +963,6 @@ execute_step() {
 # Main build function
 run_build() {
     local start_step=""
-    
-    # If resume is requested, load saved progress
-    if [ "$RESUME" = true ]; then
-        start_step=$(load_progress)
-    fi
     
     # Check if we have any passthrough arguments
     local passthrough_args=()

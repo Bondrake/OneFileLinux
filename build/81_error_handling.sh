@@ -54,37 +54,6 @@ handle_error() {
     echo "DEBUG: Error handler activated - exit code: $err_code, command: '$command', line: $line_num, script: $SCRIPT_NAME"
     
     if [ $err_code -ne 0 ]; then
-        # List of non-critical errors that we can ignore in containerized environments
-        local ignore_patterns=(
-            "chmod.*permission denied"
-            "mkdir.*permission denied"
-            "chmod:.*Operation not permitted"
-            "mkdir:.*Operation not permitted"
-            "ln -fs.*permission denied"
-            "chmod 777"
-            "mkdir -p ./alpine-minirootfs"
-            "write.*build_error.log: Permission denied"
-        )
-        
-        # Check if command matches any ignore patterns and we're in a container
-        local should_ignore=false
-        if [ "${IN_DOCKER_CONTAINER:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ] || grep -q "docker\|container" /proc/1/cgroup 2>/dev/null || [ -f "/.dockerenv" ]; then
-            for pattern in "${ignore_patterns[@]}"; do
-                if echo "$command" | grep -i -q "$pattern"; then
-                    should_ignore=true
-                    break
-                fi
-            done
-        fi
-        
-        # For non-critical errors in containers, warn but continue
-        if [ "$should_ignore" = true ]; then
-            log "WARNING" "Non-critical command failed at line $line_num: $command"
-            log "INFO" "Continuing build process despite this error"
-            return 0
-        fi
-        
-        # For critical errors, follow normal error handling
         log "ERROR" "Command failed with exit code $err_code at line $line_num: $command"
         log "ERROR" "Check $BUILD_LOG for details"
         
@@ -156,140 +125,6 @@ trap_errors() {
     trap 'handle_error ${LINENO} "${BASH_COMMAND}"' ERR
 }
 
-# Check if prerequisites are met for this specific script
-check_prerequisites() {
-    case "$SCRIPT_NAME" in
-        "01_get.sh")
-            # Check for wget
-            if ! command -v wget &> /dev/null; then
-                log "ERROR" "wget not found. Install wget and try again."
-                log "INFO" "Run ./00_prepare.sh to install required dependencies."
-                exit 1
-            fi
-            ;;
-        "02_chrootandinstall.sh")
-            # Check for chroot capability
-            if [ "$EUID" -ne 0 ]; then
-                log "ERROR" "This script requires root/sudo privileges for chroot."
-                log "INFO" "Run with sudo: sudo ./02_chrootandinstall.sh"
-                exit 1
-            fi
-            
-            # Check if minirootfs exists
-            if [ ! -d "alpine-minirootfs" ]; then
-                log "ERROR" "alpine-minirootfs directory not found."
-                log "INFO" "Run ./01_get.sh first to download Alpine Linux."
-                exit 1
-            fi
-            ;;
-        "03_conf.sh")
-            # Check if minirootfs exists
-            if [ ! -d "alpine-minirootfs" ]; then
-                log "ERROR" "alpine-minirootfs directory not found."
-                log "INFO" "Run ./01_get.sh and ./02_chrootandinstall.sh first."
-                exit 1
-            fi
-            
-            # Check if zfiles exists
-            if [ ! -d "zfiles" ]; then
-                log "ERROR" "zfiles directory not found."
-                exit 1
-            fi
-            ;;
-        "04_build.sh")
-            # Check if kernel source exists
-            if [ ! -d "linux" ]; then
-                log "ERROR" "linux directory not found."
-                log "INFO" "Run ./01_get.sh first to download Linux kernel."
-                exit 1
-            fi
-            
-            # Check for build tools
-            if ! command -v make &> /dev/null; then
-                log "ERROR" "make not found. Install build tools and try again."
-                log "INFO" "Run ./00_prepare.sh to install required dependencies."
-                exit 1
-            fi
-            ;;
-    esac
-}
-
-# Use the print_banner from 80_common.sh instead of duplicating it here
-
-# Function to print script start
-print_script_start() {
-    # Only print the banner if it hasn't been printed already
-    if [[ "${BANNER_PRINTED:-false}" != "true" ]]; then
-        print_banner
-        export BANNER_PRINTED=true
-    fi
-}
-
-# Function to print script end
-print_script_end() {
-    echo "----------------------------------------------------"
-    log "SUCCESS" "$SCRIPT_NAME completed successfully"
-    echo "----------------------------------------------------"
-}
-# Ensure this function is exported immediately upon definition
-export -f print_script_end
-
-# Function to check if the script can resume from a checkpoint
-check_resume_point() {
-    if [ -n "$1" ] && [ "$1" = "--resume" ]; then
-        log "INFO" "Resuming from last successful checkpoint"
-        RESUME_MODE=true
-    else
-        RESUME_MODE=false
-    fi
-}
-# Ensure this function is exported immediately upon definition
-export -f check_resume_point
-
-# Generate a secure random password
-generate_random_password() {
-    local length=${1:-12}
-    local chars="A-Za-z0-9_!@#$%^&*()"
-    
-    # Method 1: Using /dev/urandom (Linux, macOS)
-    if [ -r "/dev/urandom" ]; then
-        local password=$(tr -dc "$chars" < /dev/urandom | head -c "$length")
-        echo "$password"
-    # Method 2: Using OpenSSL (fallback)
-    elif command -v openssl &> /dev/null; then
-        local password=$(openssl rand -base64 $((length * 2)) | tr -dc "$chars" | head -c "$length")
-        echo "$password"
-    # Method 3: Using built-in $RANDOM (last resort)
-    else
-        local password=""
-        local charcount=${#chars}
-        for i in $(seq 1 "$length"); do
-            local rand=$((RANDOM % charcount))
-            password="${password}${chars:$rand:1}"
-        done
-        echo "$password"
-    fi
-}
-
-# Generate a password hash for /etc/shadow
-create_password_hash() {
-    local password="$1"
-    
-    # Method 1: Using OpenSSL (Linux, macOS)
-    if command -v openssl &> /dev/null; then
-        local hash=$(openssl passwd -6 "$password")
-        echo "$hash"
-    # Method 2: Using mkpasswd (many Linux distros)
-    elif command -v mkpasswd &> /dev/null; then
-        local hash=$(mkpasswd -m sha-512 "$password")
-        echo "$hash"
-    # Method 3: Failed to hash
-    else
-        log "ERROR" "No password hashing tool available (openssl or mkpasswd required)"
-        echo "ERROR"
-    fi
-}
-
 # Use a global variable to ensure we only initialize once per session
 ONEFILELINUX_ERROR_HANDLING_INITIALIZED=${ONEFILELINUX_ERROR_HANDLING_INITIALIZED:-false}
 
@@ -316,7 +151,6 @@ init_error_handling() {
     
     # Export critical functions for use in other scripts
     # Export these immediately upon definition for Docker environments
-    type check_resume_point >/dev/null 2>&1 && export -f check_resume_point || true
     type print_script_end >/dev/null 2>&1 && export -f print_script_end || true
     type print_script_start >/dev/null 2>&1 && export -f print_script_start || true
     

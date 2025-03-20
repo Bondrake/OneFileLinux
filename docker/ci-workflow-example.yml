@@ -1,0 +1,77 @@
+name: Build OneFileLinux
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      build_profile:
+        description: 'Build profile to use'
+        required: true
+        default: 'standard'
+        type: choice
+        options:
+          - minimal
+          - standard
+          - full
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/onefilelinux/builder:latest
+      options: --privileged
+    
+    steps:
+    - name: Check Environment
+      run: |
+        echo "Running in prebuilt OneFileLinux builder container"
+        uname -a
+        echo "CPU info:"
+        cat /proc/cpuinfo | grep "model name" | head -1
+        echo "Memory info:"
+        free -h
+        echo "Disk info:"
+        df -h
+    
+    - name: Determine Build Profile
+      id: profile
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "Using manually selected profile: ${{ github.event.inputs.build_profile }}"
+          echo "profile=${{ github.event.inputs.build_profile }}" >> $GITHUB_OUTPUT
+        else
+          echo "Using default profile: standard"
+          echo "profile=standard" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Build OneFileLinux
+      run: |
+        cd /onefilelinux/build
+        BUILD_PROFILE="${{ steps.profile.outputs.profile }}"
+        echo "Building OneFileLinux with profile: $BUILD_PROFILE"
+        
+        # Run the build with the selected profile
+        if [ "$BUILD_PROFILE" == "minimal" ]; then
+          ./build.sh --minimal --use-cache
+        elif [ "$BUILD_PROFILE" == "full" ]; then
+          ./build.sh --full --with-zfs --with-network-tools --with-crypto --use-cache
+        else
+          ./build.sh --standard --with-network-tools --use-cache
+        fi
+      
+    - name: Check Build Artifacts
+      run: |
+        cd /onefilelinux/output
+        ls -lah
+        file *.efi || echo "No EFI files found"
+        
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: onefilelinux-efi-${{ steps.profile.outputs.profile }}
+        path: |
+          /onefilelinux/output/*.efi
+          /onefilelinux/build/build_timing.log

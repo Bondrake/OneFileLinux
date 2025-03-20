@@ -4,6 +4,7 @@
 # Default values if detection fails
 DEFAULT_MEM="4g"
 DEFAULT_CPUS="2"
+
 MIN_FREE_MEM_GB=4  # Minimum free memory to leave for the host system
 MIN_FREE_CPUS=1    # Minimum free CPU cores to leave for the host system
 
@@ -39,8 +40,12 @@ if [ $AVAIL_CPUS -lt 1 ]; then
     AVAIL_CPUS=1
 fi
 
-# Use 75% of available memory for Docker to be safe
-DOCKER_MEM_GB=$((AVAIL_MEM_GB * 3 / 4))
+# Use 75% of available memory for Docker if less than 10GB, otherwise 85%
+if [ $AVAIL_MEM_GB -lt 10 ]; then
+    DOCKER_MEM_GB=$((AVAIL_MEM_GB * 3 / 4))
+else
+    DOCKER_MEM_GB=$((AVAIL_MEM_GB * 85 / 100))
+fi
 DOCKER_MEM="${DOCKER_MEM_GB}g"
 
 # Determine build flags
@@ -48,9 +53,6 @@ BUILD_FLAGS="--jobs=$AVAIL_CPUS"
 if [ $DOCKER_MEM_GB -gt 16 ]; then
     # Plenty of memory, no need for special flags
     BUILD_FLAGS="$BUILD_FLAGS"
-elif [ $DOCKER_MEM_GB -gt 8 ]; then
-    # Good amount of memory, but be careful
-    BUILD_FLAGS="$BUILD_FLAGS --use-swap"
 else
     # Limited memory, use memory optimization flags
     BUILD_FLAGS="$BUILD_FLAGS --use-swap"
