@@ -291,19 +291,33 @@ run_build() {
             parse_build_flags "$BUILD_ARGS" true
             
             # Determine the appropriate build profile based on flags
-            if [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ]; then
-                echo "Setting active profile to 'minimal' based on --minimal flag detection"
+            # Add lots of debug information to trace the issue
+            echo "DEBUG: Original BUILD_ARGS: $BUILD_ARGS"
+            
+            if [[ "$BUILD_ARGS" == *"--full"* ]]; then
+                echo "DEBUG: --full flag detected directly in BUILD_ARGS"
+                export BUILD_TYPE="full"
+                profile="full"
+            elif [[ "$BUILD_ARGS" == *"--minimal"* ]]; then
+                echo "DEBUG: --minimal flag detected directly in BUILD_ARGS"
+                export BUILD_TYPE="minimal" 
+                profile="minimal"
+            elif [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ]; then
+                echo "DEBUG: Setting active profile to 'minimal' based on INCLUDE_MINIMAL_KERNEL=true"
                 export BUILD_TYPE="minimal"
                 profile="minimal"
             elif [ "${INCLUDE_BTRFS:-false}" = "true" ] && [ "${INCLUDE_ZFS:-true}" = "true" ]; then
-                echo "Setting active profile to 'full' based on feature flags"
+                echo "DEBUG: Setting active profile to 'full' based on feature flags"
+                echo "DEBUG: INCLUDE_BTRFS=${INCLUDE_BTRFS:-false}, INCLUDE_ZFS=${INCLUDE_ZFS:-true}"
                 export BUILD_TYPE="full"
                 profile="full"
             else
-                echo "Using 'standard' profile as default"
+                echo "DEBUG: Using 'standard' profile as default"
                 export BUILD_TYPE="standard"
                 profile="standard"
             fi
+            
+            echo "DEBUG: Set BUILD_TYPE=$BUILD_TYPE and profile=$profile"
             
             # Source the config_helper to get access to profile management functions
             if [ -f "$BUILD_DIR/83_config_helper.sh" ]; then

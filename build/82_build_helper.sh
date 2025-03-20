@@ -1062,6 +1062,11 @@ parse_build_flags() {
         >&2 echo -e "${BLUE}[INFO]${NC} $1"
     }
 
+    # Add explicit debug for argument handling
+    echo "DEBUG: parse_build_flags received args: '$build_args'" >&2
+    # Print the raw arguments without splitting to see if quotes are preserved
+    echo "DEBUG: Raw arguments: $build_args" >&2
+    
     _temp_log "Parsing build flags: $build_args"
     
     # Default flag values
@@ -1098,11 +1103,27 @@ parse_build_flags() {
     if [ -n "${INCLUDE_EDITORS:-}" ]; then _include_editors="$INCLUDE_EDITORS"; fi
     if [ -n "${INCLUDE_SECURITY:-}" ]; then _include_security="$INCLUDE_SECURITY"; fi
     
-    # Split the build_args string into an array
-    IFS=' ' read -ra FLAGS <<< "$build_args"
+    # Split the build_args string into an array with better handling for quoted arguments
+    # First normalize spaces around delimiters to ensure proper splitting
+    local normalized_args=$(echo "$build_args" | sed 's/--/ --/g' | sed 's/^--/--/g')
+    echo "DEBUG: Normalized args: $normalized_args" >&2
+    
+    # Split into array
+    IFS=' ' read -ra FLAGS <<< "$normalized_args"
+    
+    # Log the flags for debugging
+    echo "DEBUG: Split flags:" >&2
+    for i in "${!FLAGS[@]}"; do
+        echo "DEBUG:   [$i] = ${FLAGS[$i]}" >&2
+    done
     
     # Iterate through all flags
     for flag in "${FLAGS[@]}"; do
+        # Skip empty flags
+        [ -z "$flag" ] && continue
+        
+        # Trim leading/trailing whitespace
+        flag=$(echo "$flag" | xargs)
         case "$flag" in
             --minimal)
                 _temp_log "Detected --minimal flag, applying minimal configuration"
@@ -1123,6 +1144,7 @@ parse_build_flags() {
                 _include_security=false
                 ;;
             --full)
+                echo "DEBUG: parse_build_flags detected --full flag, applying full configuration" >&2
                 _temp_log "Detected --full flag, applying full configuration"
                 _include_minimal_kernel=false
                 _include_zfs=true
