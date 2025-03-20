@@ -373,20 +373,14 @@ create_efi() {
         }
     fi
     
-    # Determine the appropriate filename suffix based on BUILD_TYPE
-    local profile_name="standard"
-    
-    # Use BUILD_TYPE if set
+    # Use BUILD_TYPE for EFI filename
     if [ -n "${BUILD_TYPE:-}" ]; then
         profile_name="${BUILD_TYPE}"
         log "INFO" "Using BUILD_TYPE for EFI filename: $profile_name"
-    # Otherwise try to determine from feature flags
-    elif [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ]; then
-        profile_name="minimal"
-        log "INFO" "Detected minimal profile from feature flags"
-    elif [ "${INCLUDE_BTRFS:-false}" = "true" ] && [ "${INCLUDE_ZFS:-true}" = "true" ]; then
-        profile_name="full"
-        log "INFO" "Detected full profile from feature flags"
+    else
+        # Fail if BUILD_TYPE is not set
+        log "ERROR" "BUILD_TYPE is not set. This is required for determining the profile."
+        return 1
     fi
     
     # Create the EFI filename using the profile name

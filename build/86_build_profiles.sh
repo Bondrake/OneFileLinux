@@ -127,7 +127,25 @@ apply_build_profile() {
     log "INFO" "Applying build profile: $profile_name"
     eval "${BUILD_PROFILES[$profile_name]}"
     
-    # Just set BUILD_TYPE variable
+    # Export all variables in the profile
+    export INCLUDE_ZFS
+    export INCLUDE_BTRFS
+    export INCLUDE_RECOVERY_TOOLS
+    export INCLUDE_NETWORK_TOOLS
+    export INCLUDE_CRYPTO
+    export INCLUDE_TUI
+    export INCLUDE_MINIMAL_KERNEL
+    export INCLUDE_COMPRESSION
+    export INCLUDE_ADVANCED_FS
+    export INCLUDE_DISK_DIAG
+    export INCLUDE_NETWORK_DIAG
+    export INCLUDE_SYSTEM_TOOLS
+    export INCLUDE_DATA_RECOVERY
+    export INCLUDE_BOOT_REPAIR
+    export INCLUDE_EDITORS
+    export INCLUDE_SECURITY
+    
+    # Set and export BUILD_TYPE variable
     export BUILD_TYPE="$profile_name"
     log "INFO" "Applied build profile: $profile_name"
     

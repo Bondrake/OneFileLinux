@@ -17,11 +17,6 @@ services:
     environment:
       # Configure build arguments here (can be overridden with .env)
       - BUILD_ARGS=${BUILD_ARGS:-"--with-zfs --with-recovery-tools --with-network-tools --use-cache --make-verbose"}
-      # Ensure feature variables propagate to all scripts
-      - INCLUDE_ZFS=${INCLUDE_ZFS:-true}
-      - INCLUDE_MINIMAL_KERNEL=${INCLUDE_MINIMAL_KERNEL:-false}
-      - INCLUDE_NETWORK_TOOLS=${INCLUDE_NETWORK_TOOLS:-true}
-      - INCLUDE_CRYPTO=${INCLUDE_CRYPTO:-true}
       # Configure user ID mapping (only used if not running as root)
       - HOST_UID=${HOST_UID:-1000}
       - HOST_GID=${HOST_GID:-1000}
@@ -35,7 +30,7 @@ services:
       - TIMING_LOG_FILE=/onefilelinux/build/build_timing.log
       # Password settings
       - GENERATE_RANDOM_PASSWORD=${GENERATE_RANDOM_PASSWORD:-true}
-      - ROOT_PASSWORD=${ROOT_PASSWORD:-""}
+      - ROOT_PASSWORD=${ROOT_PASSWORD:-"onefilelinux"}
     # Resource limits (dynamically set by auto-resources.sh script)
     deploy:
       resources:
