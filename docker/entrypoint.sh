@@ -301,22 +301,36 @@ run_build() {
             fi
             
             # Parse build arguments properly through the build helper's function
-            echo "Parsing build flags from arguments: $BUILD_ARGS"
+            echo "[INFO] Processing BUILD_ARGS from environment: $BUILD_ARGS"
+            
+            # Extract build profile from BUILD_ARGS
+            BUILD_PROFILE="standard"  # Default
+            if [[ "$BUILD_ARGS" == *"--minimal"* ]]; then
+                BUILD_PROFILE="minimal"
+                echo "[INFO] Detected minimal profile in build arguments"
+            elif [[ "$BUILD_ARGS" == *"--standard"* ]]; then
+                BUILD_PROFILE="standard"
+                echo "[INFO] Detected standard profile in build arguments"
+            elif [[ "$BUILD_ARGS" == *"--full"* ]]; then
+                BUILD_PROFILE="full"
+                echo "[INFO] Detected full profile in build arguments"
+            elif [[ "$BUILD_ARGS" =~ --profile=([a-zA-Z0-9_-]+) ]]; then
+                BUILD_PROFILE="${BASH_REMATCH[1]}"
+                echo "[INFO] Detected profile parameter: $BUILD_PROFILE"
+            fi
+            
+            # Set BUILD_TYPE and export for all downstream scripts
+            export BUILD_TYPE="$BUILD_PROFILE"
+            export BUILD_PROFILE="$BUILD_PROFILE"
+            export explicit_profile=true
+            
+            # Also parse flags through build helper for consistency
             if declare -f parse_build_flags >/dev/null 2>&1; then
                 parse_build_flags "$BUILD_ARGS" true
-                
-                # The profile should now be correctly set through the refactored profile system
-                # No need to manually set BUILD_TYPE
-                echo "Profile configuration completed through parse_build_flags"
-                
-                # Print effective build profile for debugging
-                if [ -n "${BUILD_TYPE:-}" ]; then
-                    echo "Effective build profile: $BUILD_TYPE"
-                else
-                    echo "WARNING: BUILD_TYPE not set after parsing flags"
-                fi
+                echo "[INFO] Profile configuration completed through parse_build_flags"
+                echo "[INFO] Set BUILD_TYPE=$BUILD_TYPE for downstream scripts"
             else
-                echo "WARNING: parse_build_flags function not available"
+                echo "[WARNING] parse_build_flags function not available"
             fi
 
             # Log the configuration that will be used
@@ -341,9 +355,14 @@ run_build() {
             # Set flag to finalize timing log in the last script
             export FINALIZE_TIMING_LOG=true
             
-            # DO NOT add the profile flag again if it's already been processed
-            # Just pass the build arguments directly to 04_build.sh 
-            echo "Executing build with arguments: $BUILD_ARGS"
+            # Ensure BUILD_TYPE is in the environment for 04_build.sh
+            if [ -n "${BUILD_TYPE:-}" ]; then
+                echo "[INFO] Using build profile: $BUILD_TYPE"
+                export BUILD_TYPE
+            fi
+            
+            # Pass the build arguments directly to 04_build.sh 
+            echo "[INFO] Executing build with arguments: $BUILD_ARGS"
             ./04_build.sh $BUILD_ARGS
             
             # Display ccache stats after build
@@ -408,14 +427,24 @@ run_build() {
         if [ -f "04_build.sh" ]; then
             chmod +x 04_build.sh
             if [ -n "$BUILD_ARGS" ]; then
-                # DO NOT add the profile flag again if it's already been processed
-                echo "Running: ./04_build.sh $BUILD_ARGS"
-                echo "WARNING: Using direct build.sh approach is deprecated. Prefer library-based build system."
+                # Ensure BUILD_TYPE is in the environment for 04_build.sh
+                if [ -n "${BUILD_TYPE:-}" ]; then
+                    echo "[INFO] Using build profile: $BUILD_TYPE"
+                    export BUILD_TYPE
+                fi
+                
+                echo "[INFO] Running: ./04_build.sh $BUILD_ARGS"
+                echo "[WARNING] Using direct build.sh approach is deprecated. Prefer library-based build system."
                 ./04_build.sh $BUILD_ARGS
             else
-                # Don't re-add profile flags
-                echo "Running: ./04_build.sh"
-                echo "WARNING: Using direct build.sh approach is deprecated. Prefer library-based build system."
+                # Ensure BUILD_TYPE is in the environment for 04_build.sh
+                if [ -n "${BUILD_TYPE:-}" ]; then
+                    echo "[INFO] Using build profile: $BUILD_TYPE"
+                    export BUILD_TYPE
+                fi
+                
+                echo "[INFO] Running: ./04_build.sh"
+                echo "[WARNING] Using direct build.sh approach is deprecated. Prefer library-based build system."
                 ./04_build.sh
             fi
         else
