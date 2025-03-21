@@ -12,6 +12,7 @@ CLAUDE.md
 build/.build_progress
 build/alpine-minirootfs*
 build/build_error.log
+build/build_timing.log
 build/linux-6*
 build/linux/
 build/linux
@@ -21,6 +22,10 @@ build/zfs
 build/.extraction_complete
 build/*/.extraction_complete
 build/onerecovery-password.txt
+build/onefilelinux-password.txt
+build/kernel-configs/*.config.backup
+build/kernel-configs/minimal.config
+build/kernel-configs/standard.config
 output/
 *.tar.gz
 *.tar.xz
