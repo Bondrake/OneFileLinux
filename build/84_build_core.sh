@@ -646,6 +646,12 @@ parse_build_args() {
                 }
                 shift
                 ;;
+            --dry-run)
+                # Don't actually build, just show what would be done
+                export DRY_RUN=true
+                log "INFO" "Dry run mode enabled - no files will be created"
+                shift
+                ;;
             # Individual component options still handled individually
             --minimal-kernel)
                 INCLUDE_MINIMAL_KERNEL=true
