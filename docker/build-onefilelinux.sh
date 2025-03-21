@@ -55,6 +55,7 @@ usage() {
     echo "  $0 -b \"--minimal\"           Build with minimal profile"
     echo "  $0 -b \"--full\"              Build with full profile"
     echo "  $0 -b \"--standard\"          Build with standard profile (default)"
+    echo "  $0 -b \"--minimal --dry-run\"  Show minimal profile configuration without building"
     echo "  $0 -i                 Launch interactive shell in the container"
     echo "  $0 --max-resources    Use maximum available system resources"
     echo "  $0 --make-verbose     Build with verbose make output (V=1)"
@@ -275,6 +276,17 @@ else
     # Check for output files with timestamp verification
     echo -e "${BLUE}[INFO]${NC} Checking for recent build output files..."
     
+    # Check for dry run mode - handle expected lack of output files
+    if [[ "$BUILD_ARGS" == *"--dry-run"* ]]; then
+        echo -e "${GREEN}[SUCCESS]${NC} Dry run completed successfully!"
+        echo -e "${BLUE}[INFO]${NC} No EFI file was created because --dry-run was specified."
+        echo -e "${BLUE}[INFO]${NC} Dry run mode only shows configuration without performing actual build."
+        echo -e "${BLUE}[INFO]${NC} Remove the --dry-run flag to perform a full build."
+        BUILD_DRY_RUN=true
+    else
+        BUILD_DRY_RUN=false
+    fi
+    
     # Look for any EFI files
     EXPECTED_EFI_FILE=""
     
@@ -344,7 +356,13 @@ else
                 echo -e "  - ${GREEN}$file_basename${NC} (Size: $FILE_SIZE)"
             done
         else
-            echo -e "${RED}[ERROR]${NC} No recent EFI files found in output directory."
+            # Adjust error message for dry run mode
+            if [ "$BUILD_DRY_RUN" = true ]; then
+                # Skip this message in dry run mode
+                :
+            else
+                echo -e "${RED}[ERROR]${NC} No recent EFI files found in output directory."
+            fi
             
             # List all EFI files in the output directory regardless of age
             ALL_EFI_FILES=$(find "$PROJECT_DIR/output" -name "*.efi" | sort)
@@ -361,8 +379,14 @@ else
                 echo -e "${RED}[ERROR]${NC} Build failed to create new EFI files."
                 exit 1
             else
-                echo -e "${RED}[ERROR]${NC} No EFI files found at all."
-                exit 1
+                # Don't error in dry run mode
+                if [ "$BUILD_DRY_RUN" = true ]; then
+                    # We already showed success message, don't repeat it
+                    :
+                else
+                    echo -e "${RED}[ERROR]${NC} No EFI files found at all."
+                    exit 1
+                fi
             fi
         fi
     fi

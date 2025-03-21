@@ -1,4 +1,6 @@
 #!/bin/bash
+# IMPORTANT: MacOS users should run using Bash 4+ from Homebrew: `/usr/local/bin/bash build.sh`
+# The default macOS Bash (3.2) does not support associative arrays used in this build system
 #
 # OneFileLinux unified build script
 # Runs the entire build process with a single command
@@ -72,10 +74,10 @@ source ./80_common.sh
 # Source all library scripts using the source_libraries function
 source_libraries "."
 
-# Set a default build profile early 
-if type -t apply_build_profile &>/dev/null; then
-    apply_build_profile "$BUILD_PROFILE"
-fi
+# We'll set the default profile in process_args to ensure command line arguments
+# take precedence over the default. This ensures --minimal actually works.
+# The BUILD_PROFILE default is set at the top of this file.
+echo -e "${BLUE}[DEBUG]${NC} Default profile if no explicit flag given: $BUILD_PROFILE"
 
 # Set error handling
 trap 'echo -e "${RED}[ERROR]${NC} An error occurred at line $LINENO. Command: $BASH_COMMAND"; exit 1' ERR
@@ -116,6 +118,7 @@ usage() {
     echo "  You can pass arguments directly to 04_build.sh by using a double dash (--)"
     echo "  followed by the arguments. These arguments will be passed as-is to 04_build.sh."
     echo "  Example: $0 build -- --minimal --without-zfs"
+    echo "  Example: $0 build -- --minimal --dry-run  # Show minimal profile config without building"
     echo ""
     echo "Examples:"
     echo "  $0                  Run all build steps"
@@ -351,10 +354,35 @@ process_args() {
     # First load config file if it exists
     load_config
     
+    # Track whether we've seen an explicit build profile flag
+    local explicit_profile=false
+    
     # Check for -- separator which indicates passthrough arguments for 04_build.sh
     local found_separator=false
     local separator_index=-1
     local all_args=("$@")
+    
+    # Check for profile flags in the arguments
+    for arg in "$@"; do
+        if [ "$arg" = "--minimal" ]; then
+            explicit_profile=true
+            echo -e "${BLUE}[DEBUG]${NC} Detected explicit --minimal profile flag in arguments"
+            break
+        elif [ "$arg" = "--standard" ]; then
+            explicit_profile=true
+            echo -e "${BLUE}[DEBUG]${NC} Detected explicit --standard profile flag in arguments"
+            break
+        elif [ "$arg" = "--full" ]; then
+            explicit_profile=true
+            echo -e "${BLUE}[DEBUG]${NC} Detected explicit --full profile flag in arguments"
+            break
+        elif [[ "$arg" == "--profile="* ]]; then
+            explicit_profile=true
+            profile_name="${arg#*=}"
+            echo -e "${BLUE}[DEBUG]${NC} Detected explicit --profile=$profile_name flag in arguments"
+            break
+        fi
+    done
     
     for ((i=0; i<$#; i++)); do
         if [ "${all_args[$i]}" = "--" ]; then
@@ -704,6 +732,14 @@ process_args() {
     # Default to "all" if no step is specified
     if [ -z "$BUILD_STEP" ]; then
         BUILD_STEP="all"
+    fi
+    
+    # If no explicit profile flag was given, apply the default profile
+    if [ "$explicit_profile" = false ] && type -t apply_build_profile &>/dev/null; then
+        echo -e "${BLUE}[DEBUG]${NC} No explicit profile flag given, applying default: $BUILD_PROFILE"
+        apply_build_profile "$BUILD_PROFILE"
+    else
+        echo -e "${BLUE}[DEBUG]${NC} Explicit profile flag detected, using command line settings"
     fi
 }
 

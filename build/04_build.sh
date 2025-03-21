@@ -62,6 +62,9 @@ main() {
     parse_build_args "$@"
     end_timing
     
+    # Disable the early exit for dry-run mode, as we want to check prerequisites first
+    # We'll exit after verifying prerequisites but before starting the actual build
+    
     # Make sure we're in the build directory
     cd "$BUILD_DIR"
     
@@ -94,8 +97,32 @@ main() {
     fi
     end_timing
     
-    # ABI header warnings suppressed
-    log "INFO" "ABI header mismatch warnings are allowed for now"
+    # If we're in dry run mode, exit before starting the build
+    if [ "${DRY_RUN:-false}" = "true" ]; then
+        log "INFO" "====== DRY RUN MODE - Configuration Summary ======"
+        log "INFO" "Build profile: ${BUILD_TYPE:-standard}"
+        log "INFO" "ZFS support: ${INCLUDE_ZFS:-true}"
+        log "INFO" "BTRFS support: ${INCLUDE_BTRFS:-false}"
+        log "INFO" "Recovery tools: ${INCLUDE_RECOVERY_TOOLS:-true}"
+        log "INFO" "Network tools: ${INCLUDE_NETWORK_TOOLS:-true}"
+        log "INFO" "Crypto support: ${INCLUDE_CRYPTO:-true}"
+        log "INFO" "TUI: ${INCLUDE_TUI:-true}"
+        log "INFO" "Minimal kernel: ${INCLUDE_MINIMAL_KERNEL:-false}"
+        log "INFO" "Compression: ${INCLUDE_COMPRESSION:-true}"
+        log "INFO" "Advanced filesystem tools: ${INCLUDE_ADVANCED_FS:-false}"
+        log "INFO" "Disk diagnostics: ${INCLUDE_DISK_DIAG:-false}"
+        log "INFO" "Network diagnostics: ${INCLUDE_NETWORK_DIAG:-false}"
+        log "INFO" "System tools: ${INCLUDE_SYSTEM_TOOLS:-false}"
+        log "INFO" "Data recovery: ${INCLUDE_DATA_RECOVERY:-false}"
+        log "INFO" "Boot repair: ${INCLUDE_BOOT_REPAIR:-false}"
+        log "INFO" "Editors: ${INCLUDE_EDITORS:-false}"
+        log "INFO" "Security tools: ${INCLUDE_SECURITY:-false}"
+        log "INFO" "Build jobs: ${BUILD_JOBS:-$(nproc)}"
+        log "INFO" "Use cache: ${USE_CACHE:-true}"
+        log "INFO" "Use swap: ${USE_SWAP:-false}"
+        log "INFO" "======= END OF DRY RUN - Exiting =======  "
+        exit 0
+    fi
 
     # Build kernel
     start_timing "Kernel build"

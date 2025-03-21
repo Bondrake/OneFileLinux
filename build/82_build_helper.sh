@@ -836,41 +836,63 @@ parse_build_flags() {
         flag=$(echo "$flag" | xargs)
         case "$flag" in
             --minimal)
+                echo "DEBUG: parse_build_flags detected --minimal flag, applying minimal configuration" >&2
                 _temp_log "Detected --minimal flag, applying minimal configuration"
-                _include_minimal_kernel=true
-                _include_zfs=false
-                _include_btrfs=false
-                _include_recovery_tools=false
-                _include_network_tools=false
-                _include_crypto=false
-                _include_tui=false
-                _include_advanced_fs=false
-                _include_disk_diag=false
-                _include_network_diag=false
-                _include_system_tools=false
-                _include_data_recovery=false
-                _include_boot_repair=false
-                _include_editors=false
-                _include_security=false
+                
+                # Apply minimal configuration directly
+                if type -t set_minimal_profile &>/dev/null; then
+                    # Use the dedicated function from build_profiles if available
+                    echo "DEBUG: Using set_minimal_profile function from profiles library" >&2
+                    set_minimal_profile
+                    echo "DEBUG: Successfully applied minimal profile using dedicated function" >&2
+                else
+                    # Fall back to directly setting variables
+                    _include_minimal_kernel=true
+                    _include_zfs=false
+                    _include_btrfs=false
+                    _include_recovery_tools=false
+                    _include_network_tools=false
+                    _include_crypto=false
+                    _include_tui=false
+                    _include_advanced_fs=false
+                    _include_disk_diag=false
+                    _include_network_diag=false
+                    _include_system_tools=false
+                    _include_data_recovery=false
+                    _include_boot_repair=false
+                    _include_editors=false
+                    _include_security=false
+                    echo "DEBUG: Applied minimal profile using direct variable setting" >&2
+                fi
                 ;;
             --full)
                 echo "DEBUG: parse_build_flags detected --full flag, applying full configuration" >&2
                 _temp_log "Detected --full flag, applying full configuration"
-                _include_minimal_kernel=false
-                _include_zfs=true
-                _include_btrfs=true
-                _include_recovery_tools=true
-                _include_network_tools=true
-                _include_crypto=true
-                _include_tui=true
-                _include_advanced_fs=true
-                _include_disk_diag=true
-                _include_network_diag=true
-                _include_system_tools=true
-                _include_data_recovery=true
-                _include_boot_repair=true
-                _include_editors=true
-                _include_security=true
+                
+                # Apply full configuration directly
+                if type -t set_full_profile &>/dev/null; then
+                    # Use the dedicated function from build_profiles if available
+                    set_full_profile
+                    echo "DEBUG: Applied full profile using dedicated function" >&2
+                else
+                    # Fall back to directly setting variables
+                    _include_minimal_kernel=false
+                    _include_zfs=true
+                    _include_btrfs=true
+                    _include_recovery_tools=true
+                    _include_network_tools=true
+                    _include_crypto=true
+                    _include_tui=true
+                    _include_advanced_fs=true
+                    _include_disk_diag=true
+                    _include_network_diag=true
+                    _include_system_tools=true
+                    _include_data_recovery=true
+                    _include_boot_repair=true
+                    _include_editors=true
+                    _include_security=true
+                    echo "DEBUG: Applied full profile using direct variable setting" >&2
+                fi
                 ;;
             --minimal-kernel)
                 _include_minimal_kernel=true
@@ -983,27 +1005,52 @@ parse_build_flags() {
                 _include_editors=false
                 _include_security=false
                 ;;
+            --dry-run)
+                # Export immediately instead of waiting for the apply_changes check
+                export DRY_RUN=true
+                echo "DEBUG: Dry run mode activated - will parse arguments but not perform actual build" >&2
+                _temp_log "Dry run mode activated - will show configuration but not run actual build"
+                ;;
         esac
     done
     
     # Apply the changes to environment variables if requested
     if [ "$apply_changes" = "true" ]; then
-        export INCLUDE_MINIMAL_KERNEL="$_include_minimal_kernel"
-        export INCLUDE_ZFS="$_include_zfs"
-        export INCLUDE_BTRFS="$_include_btrfs"
-        export INCLUDE_RECOVERY_TOOLS="$_include_recovery_tools"
-        export INCLUDE_NETWORK_TOOLS="$_include_network_tools"
-        export INCLUDE_CRYPTO="$_include_crypto"
-        export INCLUDE_TUI="$_include_tui"
-        export INCLUDE_ADVANCED_FS="$_include_advanced_fs"
-        export INCLUDE_DISK_DIAG="$_include_disk_diag"
-        export INCLUDE_NETWORK_DIAG="$_include_network_diag"
-        export INCLUDE_SYSTEM_TOOLS="$_include_system_tools"
-        export INCLUDE_DATA_RECOVERY="$_include_data_recovery"
-        export INCLUDE_BOOT_REPAIR="$_include_boot_repair"
-        export INCLUDE_EDITORS="$_include_editors"
-        export INCLUDE_SECURITY="$_include_security"
+        # Create a flag variable to track if we used a profile function
+        local used_profile_function=false
         
+        # Check for special case handling
+        if [[ "$build_args" == *"--minimal"* ]] && type -t set_minimal_profile &>/dev/null; then
+            # We already applied the minimal profile earlier, don't override it
+            used_profile_function=true
+            echo "DEBUG: Skipping variable export since set_minimal_profile was used" >&2
+        elif [[ "$build_args" == *"--full"* ]] && type -t set_full_profile &>/dev/null; then
+            # We already applied the full profile earlier, don't override it
+            used_profile_function=true
+            echo "DEBUG: Skipping variable export since set_full_profile was used" >&2
+        fi
+        
+        # Only set from _include_* variables if we didn't use a profile function
+        if [ "$used_profile_function" != "true" ]; then
+            echo "DEBUG: Exporting variables from _include_* local variables" >&2
+            export INCLUDE_MINIMAL_KERNEL="$_include_minimal_kernel"
+            export INCLUDE_ZFS="$_include_zfs"
+            export INCLUDE_BTRFS="$_include_btrfs"
+            export INCLUDE_RECOVERY_TOOLS="$_include_recovery_tools"
+            export INCLUDE_NETWORK_TOOLS="$_include_network_tools"
+            export INCLUDE_CRYPTO="$_include_crypto"
+            export INCLUDE_TUI="$_include_tui"
+            export INCLUDE_ADVANCED_FS="$_include_advanced_fs"
+            export INCLUDE_DISK_DIAG="$_include_disk_diag"
+            export INCLUDE_NETWORK_DIAG="$_include_network_diag"
+            export INCLUDE_SYSTEM_TOOLS="$_include_system_tools"
+            export INCLUDE_DATA_RECOVERY="$_include_data_recovery"
+            export INCLUDE_BOOT_REPAIR="$_include_boot_repair"
+            export INCLUDE_EDITORS="$_include_editors"
+            export INCLUDE_SECURITY="$_include_security"
+        fi
+        
+        # Print summary info in any case
         _temp_log "Applied feature flags from build arguments"
     fi
     
@@ -1053,8 +1100,6 @@ handle_kernel_permissions() {
     return 0
 }
 
-export -f safe_copy
-export -f safe_symlink
 export -f configure_alpine
 export -f setup_kernel_config
 export -f setup_zfs
