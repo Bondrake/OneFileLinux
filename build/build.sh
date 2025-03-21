@@ -206,6 +206,13 @@ print_config() {
     if type -t get_build_profile_name &>/dev/null; then
         profile_name=$(get_build_profile_name)
         log "INFO" "  Build profile: ${GREEN}${profile_name}${NC}"
+        
+        # Show how the profile was applied
+        if [ "$explicit_profile" = "true" ]; then
+            log "INFO" "  Profile source: Command line flag (--${profile_name} or --profile=${profile_name})"
+        else
+            log "INFO" "  Profile source: Default profile from configuration"
+        fi
     else
         # Fallback to basic detection
         if [ "$INCLUDE_MINIMAL_KERNEL" = "true" ]; then
@@ -363,7 +370,7 @@ process_args() {
     load_config
     
     # Track whether we've seen an explicit build profile flag
-    local explicit_profile=false
+    export explicit_profile=false
     
     # Check for -- separator which indicates passthrough arguments for 04_build.sh
     local found_separator=false
@@ -760,7 +767,16 @@ process_args() {
         apply_build_profile "$BUILD_PROFILE"
     else
         echo -e "${BLUE}[DEBUG]${NC} Explicit profile flag detected, using command line settings"
+        
+        # If an explicit profile was specified, make sure it's actually applied
+        if [ "$explicit_profile" = true ] && [ -n "$BUILD_PROFILE" ] && type -t apply_build_profile &>/dev/null; then
+            log "INFO" "Ensuring build profile '$BUILD_PROFILE' is fully applied"
+            apply_build_profile "$BUILD_PROFILE"
+        fi
     fi
+    
+    # Set export flag to indicate build profile is fully applied
+    export BUILD_PROFILE_READY=true
 }
 
 # Clean previous build
@@ -1025,12 +1041,15 @@ run_build() {
         done
         
         # If no profile flag in passthrough args but we have an explicit profile, add it
-        if [ "$contains_profile_flag" = false ] && [ "$explicit_profile" = true ] && [ -n "$BUILD_PROFILE" ]; then
+        if [ "$contains_profile_flag" = false ] && [ -n "$BUILD_PROFILE" ]; then
             log "INFO" "Propagating profile '$BUILD_PROFILE' to build script"
             passthrough_args+=("--profile=$BUILD_PROFILE")
             # Update the BUILD_PASSTHROUGH_ARGS for later use
             BUILD_PASSTHROUGH_ARGS="${passthrough_args[*]}"
             log "INFO" "Updated passthrough arguments: $BUILD_PASSTHROUGH_ARGS"
+            
+            # Also export the BUILD_TYPE for downstream scripts
+            export BUILD_TYPE="$BUILD_PROFILE"
         fi
     fi
     
@@ -1081,7 +1100,7 @@ main() {
     # Process command line arguments
     process_args "$@"
     
-    # Display build configuration
+    # Display build configuration (after profile is fully applied)
     print_config
     
     # Setup cache if enabled
