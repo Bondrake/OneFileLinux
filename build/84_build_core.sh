@@ -136,10 +136,6 @@ build_kernel() {
     # Enter kernel directory
     cd "$KERNEL_DIR"
     
-    # ABI header mismatch warnings are allowed
-    log "INFO" "ABI header mismatch warnings are allowed for now"
-    
-    
     # Check directory permissions before building
     log "INFO" "Checking kernel source directory permissions"
     local perm_ok=true
@@ -173,10 +169,25 @@ build_kernel() {
         fi
     fi
     
+    # Detect if we're on macOS and use gmake if available
+    if [ "$(uname -s)" = "Darwin" ]; then
+        # Check if Homebrew's gmake (GNU Make 4.0+) is available
+        if command -v gmake &>/dev/null; then
+            log "INFO" "macOS detected. Using Homebrew's gmake instead of system make"
+            export MAKE="gmake"
+        else
+            log "WARNING" "On macOS but Homebrew's gmake not found. Install with: brew install make"
+            export MAKE="make"
+        fi
+    else
+        export MAKE="make"
+    fi
+    log "INFO" "Using make command: $MAKE"
+    
     # Set kernel config interactively if requested
     if [ "${INTERACTIVE_CONFIG:-false}" = "true" ]; then
         log "INFO" "Using interactive kernel configuration"
-        make menuconfig
+        $MAKE menuconfig
     else
         log "INFO" "Using non-interactive kernel configuration"
         # Check for module signing configuration and fix OpenSSL-related settings
@@ -196,7 +207,7 @@ build_kernel() {
             log "INFO" "Keeping module signing enabled with empty trusted keys"
         fi
         # Apply configuration updates
-        make olddefconfig
+        $MAKE olddefconfig
     fi
     
     # Determine verbosity level
@@ -210,10 +221,10 @@ build_kernel() {
     # Build with compiler cache if available
     if [ "${USE_CACHE:-false}" = "true" ] && command -v ccache &> /dev/null; then
         log "INFO" "Using compiler cache for faster builds"
-        log "INFO" "Make command: make $make_v -j$threads CC=\"ccache gcc\" HOSTCC=\"ccache gcc\""
+        log "INFO" "Make command: $MAKE $make_v -j$threads CC=\"ccache gcc\" HOSTCC=\"ccache gcc\""
         
         # Use a wrapper for improved error handling
-        nice -n 19 make $make_v -j$threads CC="ccache gcc" HOSTCC="ccache gcc" 2>&1 | tee kernel_build.log || {
+        nice -n 19 $MAKE $make_v -j$threads CC="ccache gcc" HOSTCC="ccache gcc" 2>&1 | tee kernel_build.log || {
             log "ERROR" "Kernel build failed"
             
             # Check build log for common errors
@@ -228,8 +239,8 @@ build_kernel() {
             return 1
         }
     else
-        log "INFO" "Make command: make $make_v -j$threads"
-        nice -n 19 make $make_v -j$threads 2>&1 | tee kernel_build.log || {
+        log "INFO" "Make command: $MAKE $make_v -j$threads"
+        nice -n 19 $MAKE $make_v -j$threads 2>&1 | tee kernel_build.log || {
             log "ERROR" "Kernel build failed"
             
             # Check build log for common errors
@@ -251,10 +262,10 @@ build_kernel() {
     # Build modules
     log "INFO" "Building kernel modules"
     if [ "${USE_CACHE:-false}" = "true" ] && command -v ccache &> /dev/null; then
-        log "INFO" "Make modules command: make $make_v modules -j$threads"
+        log "INFO" "Make modules command: $MAKE $make_v modules -j$threads"
         
         # Use a wrapper for improved error handling
-        nice -n 19 make $make_v modules -j$threads CC="ccache gcc" HOSTCC="ccache gcc" 2>&1 | tee module_build.log || {
+        nice -n 19 $MAKE $make_v modules -j$threads CC="ccache gcc" HOSTCC="ccache gcc" 2>&1 | tee module_build.log || {
             log "ERROR" "Module build failed"
             
             # Check build log for common errors
@@ -269,8 +280,8 @@ build_kernel() {
             return 1
         }
     else
-        log "INFO" "Make modules command: make $make_v modules -j$threads"
-        nice -n 19 make $make_v modules -j$threads 2>&1 | tee module_build.log || {
+        log "INFO" "Make modules command: $MAKE $make_v modules -j$threads"
+        nice -n 19 $MAKE $make_v modules -j$threads 2>&1 | tee module_build.log || {
             log "ERROR" "Module build failed"
             
             # Check build log for common errors
@@ -291,8 +302,8 @@ build_kernel() {
     
     # Install modules
     log "INFO" "Installing kernel modules"
-    log "INFO" "Make modules_install command: make $make_v INSTALL_MOD_PATH=\"$ROOTFS_DIR\" modules_install -j$threads"
-    INSTALL_MOD_PATH="$ROOTFS_DIR" make $make_v modules_install -j$threads 2>&1 | tee module_install.log || {
+    log "INFO" "Make modules_install command: $MAKE $make_v INSTALL_MOD_PATH=\"$ROOTFS_DIR\" modules_install -j$threads"
+    INSTALL_MOD_PATH="$ROOTFS_DIR" $MAKE $make_v modules_install -j$threads 2>&1 | tee module_install.log || {
         log "ERROR" "Module installation failed"
         
         # Check log for common errors
@@ -622,6 +633,17 @@ parse_build_args() {
             --full)
                 # Use apply_build_profile from 86_build_profiles.sh
                 apply_build_profile "full"
+                shift
+                ;;
+            --profile=*)
+                # Handle profile selection with --profile= parameter
+                profile_name="${1#*=}"
+                # Use apply_build_profile from 86_build_profiles.sh
+                log "INFO" "Applying profile from --profile= parameter: $profile_name"
+                apply_build_profile "$profile_name" || {
+                    log "ERROR" "Failed to apply profile: $profile_name"
+                    exit 1
+                }
                 shift
                 ;;
             # Individual component options still handled individually

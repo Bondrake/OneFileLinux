@@ -284,44 +284,40 @@ run_build() {
             echo "CCache statistics before build:"
             ccache -s
             
-            # Parse build arguments early to set feature flags for all scripts
-            echo "Loading build helper library to parse build arguments"
-            source "./82_build_helper.sh"
-            echo "Parsing build flags from arguments: $BUILD_ARGS"
-            parse_build_flags "$BUILD_ARGS" true
-            
-            # Determine the appropriate build profile based on flags
-            # Add lots of debug information to trace the issue
-            echo "DEBUG: Original BUILD_ARGS: $BUILD_ARGS"
-            
-            if [[ "$BUILD_ARGS" == *"--full"* ]]; then
-                echo "DEBUG: --full flag detected directly in BUILD_ARGS"
-                export BUILD_TYPE="full"
-                profile="full"
-            elif [[ "$BUILD_ARGS" == *"--minimal"* ]]; then
-                echo "DEBUG: --minimal flag detected directly in BUILD_ARGS"
-                export BUILD_TYPE="minimal" 
-                profile="minimal"
-            elif [ "${INCLUDE_MINIMAL_KERNEL:-false}" = "true" ]; then
-                echo "DEBUG: Setting active profile to 'minimal' based on INCLUDE_MINIMAL_KERNEL=true"
-                export BUILD_TYPE="minimal"
-                profile="minimal"
-            elif [ "${INCLUDE_BTRFS:-false}" = "true" ] && [ "${INCLUDE_ZFS:-true}" = "true" ]; then
-                echo "DEBUG: Setting active profile to 'full' based on feature flags"
-                echo "DEBUG: INCLUDE_BTRFS=${INCLUDE_BTRFS:-false}, INCLUDE_ZFS=${INCLUDE_ZFS:-true}"
-                export BUILD_TYPE="full"
-                profile="full"
+            # Load common library to get access to source_libraries
+            if [ -f "./80_common.sh" ]; then
+                echo "Loading common library first to properly handle build profiles"
+                source "./80_common.sh"
+                
+                # Use the proper library loading function to ensure correct order
+                if declare -f source_libraries >/dev/null 2>&1; then
+                    echo "Using source_libraries function to load all libraries in correct order"
+                    source_libraries "."
+                fi
             else
-                echo "DEBUG: Using 'standard' profile as default"
-                export BUILD_TYPE="standard"
-                profile="standard"
+                # Fallback if common library is not available
+                echo "WARNING: 80_common.sh not found, falling back to direct dependency loading"
+                source "./82_build_helper.sh"
             fi
             
-            echo "DEBUG: Set BUILD_TYPE=$BUILD_TYPE and profile=$profile"
-            
-            # Just set the BUILD_TYPE directly
-            export BUILD_TYPE="$profile"
-            echo "Set BUILD_TYPE=$profile"
+            # Parse build arguments properly through the build helper's function
+            echo "Parsing build flags from arguments: $BUILD_ARGS"
+            if declare -f parse_build_flags >/dev/null 2>&1; then
+                parse_build_flags "$BUILD_ARGS" true
+                
+                # The profile should now be correctly set through the refactored profile system
+                # No need to manually set BUILD_TYPE
+                echo "Profile configuration completed through parse_build_flags"
+                
+                # Print effective build profile for debugging
+                if [ -n "${BUILD_TYPE:-}" ]; then
+                    echo "Effective build profile: $BUILD_TYPE"
+                else
+                    echo "WARNING: BUILD_TYPE not set after parsing flags"
+                fi
+            else
+                echo "WARNING: parse_build_flags function not available"
+            fi
 
             # Log the configuration that will be used
             echo "Using build configuration:"
@@ -345,14 +341,9 @@ run_build() {
             # Set flag to finalize timing log in the last script
             export FINALIZE_TIMING_LOG=true
             
-            # Make sure BUILD_TYPE is explicitly added to the command line arguments
-            # This ensures the profile is correctly passed to 04_build.sh
-            if [ -n "${BUILD_TYPE:-}" ] && [[ "$BUILD_ARGS" != *"--${BUILD_TYPE}"* ]]; then
-                echo "Adding --${BUILD_TYPE} flag to ensure profile is correctly set"
-                BUILD_ARGS="--${BUILD_TYPE} $BUILD_ARGS"
-            fi
-            
-            # Pass the build arguments directly to 04_build.sh
+            # DO NOT add the profile flag again if it's already been processed
+            # Just pass the build arguments directly to 04_build.sh 
+            echo "Executing build with arguments: $BUILD_ARGS"
             ./04_build.sh $BUILD_ARGS
             
             # Display ccache stats after build
@@ -378,14 +369,11 @@ run_build() {
             # Set flag to finalize timing log in the last script
             export FINALIZE_TIMING_LOG=true
             
-            # Prepare the build arguments based on profile
+            # Just use sensible defaults without re-adding profile
             local build_args="--use-cache --use-swap"
-            if [ -n "${BUILD_TYPE:-}" ]; then
-                echo "Adding --${BUILD_TYPE} flag to ensure profile is correctly set"
-                build_args="--${BUILD_TYPE} $build_args"
-            fi
             
             # Pass build arguments directly to 04_build.sh
+            echo "Running with default arguments: $build_args"
             ./04_build.sh $build_args
             
             echo "CCache statistics after build:"
@@ -420,26 +408,15 @@ run_build() {
         if [ -f "04_build.sh" ]; then
             chmod +x 04_build.sh
             if [ -n "$BUILD_ARGS" ]; then
-                # Make sure BUILD_TYPE is explicitly added to the command line arguments
-                if [ -n "${BUILD_TYPE:-}" ] && [[ "$BUILD_ARGS" != *"--${BUILD_TYPE}"* ]]; then
-                    echo "Adding --${BUILD_TYPE} flag to ensure profile is correctly set"
-                    BUILD_ARGS="--${BUILD_TYPE} $BUILD_ARGS"
-                fi
-                
+                # DO NOT add the profile flag again if it's already been processed
                 echo "Running: ./04_build.sh $BUILD_ARGS"
                 echo "WARNING: Using direct build.sh approach is deprecated. Prefer library-based build system."
                 ./04_build.sh $BUILD_ARGS
             else
-                # Prepare the build arguments based on profile
-                local build_args=""
-                if [ -n "${BUILD_TYPE:-}" ]; then
-                    echo "Adding --${BUILD_TYPE} flag to ensure profile is correctly set"
-                    build_args="--${BUILD_TYPE}"
-                fi
-                
-                echo "Running: ./04_build.sh $build_args"
+                # Don't re-add profile flags
+                echo "Running: ./04_build.sh"
                 echo "WARNING: Using direct build.sh approach is deprecated. Prefer library-based build system."
-                ./04_build.sh $build_args
+                ./04_build.sh
             fi
         else
             echo "ERROR: Build script 04_build.sh not found"

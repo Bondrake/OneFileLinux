@@ -80,6 +80,19 @@ cd build
 ./build.sh
 ```
 
+#### Note for macOS Users
+
+macOS comes with an older version of Bash (3.2) that doesn't support associative arrays needed by the build system. To build on macOS:
+
+1. Install a newer Bash with Homebrew: `brew install bash`
+2. Run the build with the newer Bash: `/usr/local/bin/bash build.sh`
+
+```bash
+# macOS with Homebrew
+brew install bash coreutils automake make gnu-sed
+/usr/local/bin/bash build.sh
+```
+
 ## Build Options
 
 OneFileLinux offers several build configurations to balance features and size:

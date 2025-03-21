@@ -1,6 +1,14 @@
 #!/bin/bash
-# IMPORTANT: MacOS users should run using Bash 4+ from Homebrew: `/usr/local/bin/bash build.sh`
-# The default macOS Bash (3.2) does not support associative arrays used in this build system
+# ⚠️  WARNING: Building on macOS is EXPERIMENTAL and not fully supported ⚠️
+# Full kernel builds will fail on macOS without a cross-compiler
+# For production builds, please use Docker: cd ../docker && ./build-onefilelinux.sh
+#
+# If you still want to try building on macOS, you'll need:
+# 1. Bash 4+ from Homebrew: `brew install bash` (and run with `/usr/local/bin/bash build.sh`)
+# 2. GNU Make 4+ from Homebrew: `brew install make` (will be used automatically as 'gmake')
+# 3. The `--dry-run` flag is recommended to test configurations: ./build.sh build -- --minimal --dry-run
+#
+# The default macOS Bash (3.2) and Make (3.81) do not meet kernel build requirements
 #
 # OneFileLinux unified build script
 # Runs the entire build process with a single command
@@ -366,20 +374,23 @@ process_args() {
     for arg in "$@"; do
         if [ "$arg" = "--minimal" ]; then
             explicit_profile=true
-            echo -e "${BLUE}[DEBUG]${NC} Detected explicit --minimal profile flag in arguments"
+            BUILD_PROFILE="minimal"
+            echo -e "${BLUE}[DEBUG]${NC} Detected explicit --minimal profile flag in arguments, setting BUILD_PROFILE=minimal"
             break
         elif [ "$arg" = "--standard" ]; then
             explicit_profile=true
-            echo -e "${BLUE}[DEBUG]${NC} Detected explicit --standard profile flag in arguments"
+            BUILD_PROFILE="standard"
+            echo -e "${BLUE}[DEBUG]${NC} Detected explicit --standard profile flag in arguments, setting BUILD_PROFILE=standard"
             break
         elif [ "$arg" = "--full" ]; then
             explicit_profile=true
-            echo -e "${BLUE}[DEBUG]${NC} Detected explicit --full profile flag in arguments"
+            BUILD_PROFILE="full"
+            echo -e "${BLUE}[DEBUG]${NC} Detected explicit --full profile flag in arguments, setting BUILD_PROFILE=full"
             break
         elif [[ "$arg" == "--profile="* ]]; then
             explicit_profile=true
-            profile_name="${arg#*=}"
-            echo -e "${BLUE}[DEBUG]${NC} Detected explicit --profile=$profile_name flag in arguments"
+            BUILD_PROFILE="${arg#*=}"
+            echo -e "${BLUE}[DEBUG]${NC} Detected explicit --profile=$BUILD_PROFILE flag in arguments"
             break
         fi
     done
@@ -689,6 +700,9 @@ process_args() {
                 shift
                 ;;
             --minimal)
+                # We've already set BUILD_PROFILE="minimal" earlier, just perform the apply
+                # This ensures consistency with --profile=minimal 
+                log "INFO" "Applying minimal profile"
                 apply_build_profile "minimal" || {
                     log "ERROR" "Failed to apply minimal profile"
                     exit 1
@@ -696,6 +710,9 @@ process_args() {
                 shift
                 ;;
             --standard)
+                # We've already set BUILD_PROFILE="standard" earlier, just perform the apply
+                # This ensures consistency with --profile=standard
+                log "INFO" "Applying standard profile"
                 apply_build_profile "standard" || {
                     log "ERROR" "Failed to apply standard profile"
                     exit 1
@@ -703,6 +720,9 @@ process_args() {
                 shift
                 ;;
             --full)
+                # We've already set BUILD_PROFILE="full" earlier, just perform the apply
+                # This ensures consistency with --profile=full
+                log "INFO" "Applying full profile"
                 apply_build_profile "full" || {
                     log "ERROR" "Failed to apply full profile"
                     exit 1
@@ -994,6 +1014,24 @@ run_build() {
     if [ -n "$BUILD_PASSTHROUGH_ARGS" ]; then
         # Split the passthrough arguments by space
         read -ra passthrough_args <<< "$BUILD_PASSTHROUGH_ARGS"
+        
+        # Check if we need to propagate the profile to 04_build.sh
+        local contains_profile_flag=false
+        for arg in "${passthrough_args[@]}"; do
+            if [[ "$arg" == "--profile="* || "$arg" == "--minimal" || "$arg" == "--standard" || "$arg" == "--full" ]]; then
+                contains_profile_flag=true
+                break
+            fi
+        done
+        
+        # If no profile flag in passthrough args but we have an explicit profile, add it
+        if [ "$contains_profile_flag" = false ] && [ "$explicit_profile" = true ] && [ -n "$BUILD_PROFILE" ]; then
+            log "INFO" "Propagating profile '$BUILD_PROFILE' to build script"
+            passthrough_args+=("--profile=$BUILD_PROFILE")
+            # Update the BUILD_PASSTHROUGH_ARGS for later use
+            BUILD_PASSTHROUGH_ARGS="${passthrough_args[*]}"
+            log "INFO" "Updated passthrough arguments: $BUILD_PASSTHROUGH_ARGS"
+        fi
     fi
     
     # If building "all", execute all steps in sequence

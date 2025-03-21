@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/usr/local/bin/bash
+# IMPORTANT: MacOS users should run using Bash 4+ from Homebrew: `/usr/local/bin/bash script.sh`
+# The default macOS Bash (3.2) does not support associative arrays used in this script
 # Make sure this file is executable (chmod +x)
 #
 # OneFileLinux Build Profiles (86_build_profiles.sh)
@@ -6,102 +8,158 @@
 # This is the central source of truth for what each build profile includes
 #
 
-# Initialize build profile definitions
-declare -A BUILD_PROFILES
+# Debug info about the script being loaded
+echo -e "${BLUE}[DEBUG]${NC} Loading build profiles library $(basename "${BASH_SOURCE[0]}")"
 
-# Define the minimal profile
-BUILD_PROFILES["minimal"]=$(cat << 'EOF'
-INCLUDE_ZFS=false
-INCLUDE_BTRFS=false
-INCLUDE_RECOVERY_TOOLS=false
-INCLUDE_NETWORK_TOOLS=false
-INCLUDE_CRYPTO=false
-INCLUDE_TUI=false
-INCLUDE_MINIMAL_KERNEL=true
-INCLUDE_COMPRESSION=true
-INCLUDE_ADVANCED_FS=false
-INCLUDE_DISK_DIAG=false
-INCLUDE_NETWORK_DIAG=false
-INCLUDE_SYSTEM_TOOLS=false
-INCLUDE_DATA_RECOVERY=false
-INCLUDE_BOOT_REPAIR=false
-INCLUDE_EDITORS=false
-INCLUDE_SECURITY=false
-EOF
-)
+# Variables to track available profiles
+AVAILABLE_PROFILES="minimal standard full"
 
-# Define the standard profile
-BUILD_PROFILES["standard"]=$(cat << 'EOF'
-INCLUDE_ZFS=true
-INCLUDE_BTRFS=false
-INCLUDE_RECOVERY_TOOLS=true
-INCLUDE_NETWORK_TOOLS=true
-INCLUDE_CRYPTO=true
-INCLUDE_TUI=true
-INCLUDE_MINIMAL_KERNEL=false
-INCLUDE_COMPRESSION=true
-INCLUDE_ADVANCED_FS=false
-INCLUDE_DISK_DIAG=false
-INCLUDE_NETWORK_DIAG=false
-INCLUDE_SYSTEM_TOOLS=false
-INCLUDE_DATA_RECOVERY=false
-INCLUDE_BOOT_REPAIR=false
-INCLUDE_EDITORS=false
-INCLUDE_SECURITY=false
-EOF
-)
+# Function to set minimal profile
+set_minimal_profile() {
+    INCLUDE_ZFS=false
+    INCLUDE_BTRFS=false
+    INCLUDE_RECOVERY_TOOLS=false
+    INCLUDE_NETWORK_TOOLS=false
+    INCLUDE_CRYPTO=false
+    INCLUDE_TUI=false
+    INCLUDE_MINIMAL_KERNEL=true
+    INCLUDE_COMPRESSION=true
+    INCLUDE_ADVANCED_FS=false
+    INCLUDE_DISK_DIAG=false
+    INCLUDE_NETWORK_DIAG=false
+    INCLUDE_SYSTEM_TOOLS=false
+    INCLUDE_DATA_RECOVERY=false
+    INCLUDE_BOOT_REPAIR=false
+    INCLUDE_EDITORS=false
+    INCLUDE_SECURITY=false
+    
+    # Export variables
+    export INCLUDE_ZFS INCLUDE_BTRFS INCLUDE_RECOVERY_TOOLS INCLUDE_NETWORK_TOOLS INCLUDE_CRYPTO
+    export INCLUDE_TUI INCLUDE_MINIMAL_KERNEL INCLUDE_COMPRESSION INCLUDE_ADVANCED_FS INCLUDE_DISK_DIAG
+    export INCLUDE_NETWORK_DIAG INCLUDE_SYSTEM_TOOLS INCLUDE_DATA_RECOVERY INCLUDE_BOOT_REPAIR
+    export INCLUDE_EDITORS INCLUDE_SECURITY
+    export BUILD_TYPE="minimal"
+}
 
-# Define the full profile
-BUILD_PROFILES["full"]=$(cat << 'EOF'
-INCLUDE_ZFS=true
-INCLUDE_BTRFS=true
-INCLUDE_RECOVERY_TOOLS=true
-INCLUDE_NETWORK_TOOLS=true
-INCLUDE_CRYPTO=true
-INCLUDE_TUI=true
-INCLUDE_MINIMAL_KERNEL=false
-INCLUDE_COMPRESSION=true
-INCLUDE_ADVANCED_FS=true
-INCLUDE_DISK_DIAG=true
-INCLUDE_NETWORK_DIAG=true
-INCLUDE_SYSTEM_TOOLS=true
-INCLUDE_DATA_RECOVERY=true
-INCLUDE_BOOT_REPAIR=true
-INCLUDE_EDITORS=true
-INCLUDE_SECURITY=true
-EOF
-)
+# Function to set standard profile
+set_standard_profile() {
+    INCLUDE_ZFS=true
+    INCLUDE_BTRFS=false
+    INCLUDE_RECOVERY_TOOLS=true
+    INCLUDE_NETWORK_TOOLS=true
+    INCLUDE_CRYPTO=true
+    INCLUDE_TUI=true
+    INCLUDE_MINIMAL_KERNEL=false
+    INCLUDE_COMPRESSION=true
+    INCLUDE_ADVANCED_FS=false
+    INCLUDE_DISK_DIAG=false
+    INCLUDE_NETWORK_DIAG=false
+    INCLUDE_SYSTEM_TOOLS=false
+    INCLUDE_DATA_RECOVERY=false
+    INCLUDE_BOOT_REPAIR=false
+    INCLUDE_EDITORS=false
+    INCLUDE_SECURITY=false
+    
+    # Export variables
+    export INCLUDE_ZFS INCLUDE_BTRFS INCLUDE_RECOVERY_TOOLS INCLUDE_NETWORK_TOOLS INCLUDE_CRYPTO
+    export INCLUDE_TUI INCLUDE_MINIMAL_KERNEL INCLUDE_COMPRESSION INCLUDE_ADVANCED_FS INCLUDE_DISK_DIAG
+    export INCLUDE_NETWORK_DIAG INCLUDE_SYSTEM_TOOLS INCLUDE_DATA_RECOVERY INCLUDE_BOOT_REPAIR
+    export INCLUDE_EDITORS INCLUDE_SECURITY
+    export BUILD_TYPE="standard"
+}
+
+# Function to set full profile
+set_full_profile() {
+    INCLUDE_ZFS=true
+    INCLUDE_BTRFS=true
+    INCLUDE_RECOVERY_TOOLS=true
+    INCLUDE_NETWORK_TOOLS=true
+    INCLUDE_CRYPTO=true
+    INCLUDE_TUI=true
+    INCLUDE_MINIMAL_KERNEL=false
+    INCLUDE_COMPRESSION=true
+    INCLUDE_ADVANCED_FS=true
+    INCLUDE_DISK_DIAG=true
+    INCLUDE_NETWORK_DIAG=true
+    INCLUDE_SYSTEM_TOOLS=true
+    INCLUDE_DATA_RECOVERY=true
+    INCLUDE_BOOT_REPAIR=true
+    INCLUDE_EDITORS=true
+    INCLUDE_SECURITY=true
+    
+    # Export variables
+    export INCLUDE_ZFS INCLUDE_BTRFS INCLUDE_RECOVERY_TOOLS INCLUDE_NETWORK_TOOLS INCLUDE_CRYPTO
+    export INCLUDE_TUI INCLUDE_MINIMAL_KERNEL INCLUDE_COMPRESSION INCLUDE_ADVANCED_FS INCLUDE_DISK_DIAG
+    export INCLUDE_NETWORK_DIAG INCLUDE_SYSTEM_TOOLS INCLUDE_DATA_RECOVERY INCLUDE_BOOT_REPAIR
+    export INCLUDE_EDITORS INCLUDE_SECURITY
+    export BUILD_TYPE="full"
+}
+
+# Function to apply a build profile - completely rewritten to avoid associative arrays
+apply_build_profile() {
+    local profile_name="$1"
+    
+    # Debug output for profile selection
+    echo -e "${BLUE}[DEBUG]${NC} Trying to apply build profile: $profile_name"
+    
+    # Apply profile using direct function calls
+    case "$profile_name" in
+        "minimal")
+            set_minimal_profile
+            log "INFO" "Applied minimal build profile"
+            return 0
+            ;;
+        "standard")
+            set_standard_profile
+            log "INFO" "Applied standard build profile"
+            return 0
+            ;;
+        "full")
+            set_full_profile
+            log "INFO" "Applied full build profile"
+            return 0
+            ;;
+        *)
+            log "ERROR" "Unknown build profile: $profile_name"
+            log "INFO" "Available profiles: $AVAILABLE_PROFILES"
+            return 1
+            ;;
+    esac
+}
 
 # Function to determine the current build profile based on settings
 get_build_profile_name() {
-    # Check if it exactly matches a known profile
-    for profile in "${!BUILD_PROFILES[@]}"; do
-        # Create a temporary file with the current configuration
-        local current_config=$(cat << EOF
-INCLUDE_ZFS=${INCLUDE_ZFS}
-INCLUDE_BTRFS=${INCLUDE_BTRFS}
-INCLUDE_RECOVERY_TOOLS=${INCLUDE_RECOVERY_TOOLS}
-INCLUDE_NETWORK_TOOLS=${INCLUDE_NETWORK_TOOLS}
-INCLUDE_CRYPTO=${INCLUDE_CRYPTO}
-INCLUDE_TUI=${INCLUDE_TUI}
-INCLUDE_MINIMAL_KERNEL=${INCLUDE_MINIMAL_KERNEL}
-INCLUDE_COMPRESSION=${INCLUDE_COMPRESSION}
-INCLUDE_ADVANCED_FS=${INCLUDE_ADVANCED_FS:-false}
-INCLUDE_DISK_DIAG=${INCLUDE_DISK_DIAG:-false}
-INCLUDE_NETWORK_DIAG=${INCLUDE_NETWORK_DIAG:-false}
-INCLUDE_SYSTEM_TOOLS=${INCLUDE_SYSTEM_TOOLS:-false}
-INCLUDE_DATA_RECOVERY=${INCLUDE_DATA_RECOVERY:-false}
-INCLUDE_BOOT_REPAIR=${INCLUDE_BOOT_REPAIR:-false}
-INCLUDE_EDITORS=${INCLUDE_EDITORS:-false}
-INCLUDE_SECURITY=${INCLUDE_SECURITY:-false}
-EOF
-)
-
-        if [ "$current_config" = "${BUILD_PROFILES[$profile]}" ]; then
-            echo "$profile"
-            return 0
-        fi
-    done
+    # Check for minimal-like configuration
+    if [ "${INCLUDE_MINIMAL_KERNEL}" = "true" ] && [ "${INCLUDE_ZFS}" = "false" ] && 
+       [ "${INCLUDE_NETWORK_TOOLS}" = "false" ] && [ "${INCLUDE_CRYPTO}" = "false" ]; then
+        echo "minimal"
+        return 0
+    fi
+    
+    # Check for full configuration - all features must be enabled
+    if [ "${INCLUDE_ZFS}" = "true" ] && [ "${INCLUDE_BTRFS}" = "true" ] && 
+       [ "${INCLUDE_RECOVERY_TOOLS}" = "true" ] && [ "${INCLUDE_NETWORK_TOOLS}" = "true" ] && 
+       [ "${INCLUDE_CRYPTO}" = "true" ] && [ "${INCLUDE_TUI}" = "true" ] && 
+       [ "${INCLUDE_ADVANCED_FS:-false}" = "true" ] && [ "${INCLUDE_DISK_DIAG:-false}" = "true" ] && 
+       [ "${INCLUDE_NETWORK_DIAG:-false}" = "true" ] && [ "${INCLUDE_SYSTEM_TOOLS:-false}" = "true" ] && 
+       [ "${INCLUDE_DATA_RECOVERY:-false}" = "true" ] && [ "${INCLUDE_BOOT_REPAIR:-false}" = "true" ] && 
+       [ "${INCLUDE_EDITORS:-false}" = "true" ] && [ "${INCLUDE_SECURITY:-false}" = "true" ]; then
+        echo "full"
+        return 0
+    fi
+    
+    # Check for standard configuration
+    if [ "${INCLUDE_ZFS}" = "true" ] && [ "${INCLUDE_BTRFS}" = "false" ] && 
+       [ "${INCLUDE_RECOVERY_TOOLS}" = "true" ] && [ "${INCLUDE_NETWORK_TOOLS}" = "true" ] && 
+       [ "${INCLUDE_CRYPTO}" = "true" ] && [ "${INCLUDE_TUI}" = "true" ] && 
+       [ "${INCLUDE_MINIMAL_KERNEL}" = "false" ] && 
+       [ "${INCLUDE_ADVANCED_FS:-false}" = "false" ] && [ "${INCLUDE_DISK_DIAG:-false}" = "false" ] && 
+       [ "${INCLUDE_NETWORK_DIAG:-false}" = "false" ] && [ "${INCLUDE_SYSTEM_TOOLS:-false}" = "false" ] && 
+       [ "${INCLUDE_DATA_RECOVERY:-false}" = "false" ] && [ "${INCLUDE_BOOT_REPAIR:-false}" = "false" ] && 
+       [ "${INCLUDE_EDITORS:-false}" = "false" ] && [ "${INCLUDE_SECURITY:-false}" = "false" ]; then
+        echo "standard"
+        return 0
+    fi
     
     # If no exact match, determine the closest match or return "custom"
     if [ "${INCLUDE_MINIMAL_KERNEL}" = "true" ]; then
@@ -113,74 +171,27 @@ EOF
     fi
 }
 
-# Function to apply a build profile
-apply_build_profile() {
-    local profile_name="$1"
-    
-    # Check if the profile exists
-    if [ -z "${BUILD_PROFILES[$profile_name]}" ]; then
-        log "ERROR" "Unknown build profile: $profile_name"
-        return 1
-    fi
-    
-    # Apply the profile by evaluating its configuration
-    log "INFO" "Applying build profile: $profile_name"
-    eval "${BUILD_PROFILES[$profile_name]}"
-    
-    # Export all variables in the profile
-    export INCLUDE_ZFS
-    export INCLUDE_BTRFS
-    export INCLUDE_RECOVERY_TOOLS
-    export INCLUDE_NETWORK_TOOLS
-    export INCLUDE_CRYPTO
-    export INCLUDE_TUI
-    export INCLUDE_MINIMAL_KERNEL
-    export INCLUDE_COMPRESSION
-    export INCLUDE_ADVANCED_FS
-    export INCLUDE_DISK_DIAG
-    export INCLUDE_NETWORK_DIAG
-    export INCLUDE_SYSTEM_TOOLS
-    export INCLUDE_DATA_RECOVERY
-    export INCLUDE_BOOT_REPAIR
-    export INCLUDE_EDITORS
-    export INCLUDE_SECURITY
-    
-    # Set and export BUILD_TYPE variable
-    export BUILD_TYPE="$profile_name"
-    log "INFO" "Applied build profile: $profile_name"
-    
-    return 0
-}
-
 # Function to list available build profiles
 list_build_profiles() {
     log "INFO" "Available build profiles:"
-    for profile in "${!BUILD_PROFILES[@]}"; do
-        log "INFO" "  - $profile"
-        # Parse the profile configuration to display features
-        local features=""
-        local config="${BUILD_PROFILES[$profile]}"
-        
-        [[ "$config" =~ INCLUDE_ZFS=true ]] && features+="ZFS, "
-        [[ "$config" =~ INCLUDE_BTRFS=true ]] && features+="Btrfs, "
-        [[ "$config" =~ INCLUDE_RECOVERY_TOOLS=true ]] && features+="Recovery Tools, "
-        [[ "$config" =~ INCLUDE_NETWORK_TOOLS=true ]] && features+="Network Tools, "
-        [[ "$config" =~ INCLUDE_CRYPTO=true ]] && features+="Crypto, "
-        [[ "$config" =~ INCLUDE_TUI=true ]] && features+="TUI, "
-        [[ "$config" =~ INCLUDE_MINIMAL_KERNEL=true ]] && features+="Minimal Kernel, "
-        [[ "$config" =~ INCLUDE_COMPRESSION=true ]] && features+="Compression, "
-        
-        # Remove trailing comma and space
-        features=${features%, }
-        
-        # Display features if they exist
-        if [ -n "$features" ]; then
-            log "INFO" "    Features: $features"
-        fi
-    done
+    
+    # Minimal profile
+    log "INFO" "  - minimal"
+    log "INFO" "    Features: Minimal Kernel, Compression"
+    
+    # Standard profile
+    log "INFO" "  - standard"
+    log "INFO" "    Features: ZFS, Recovery Tools, Network Tools, Crypto, TUI, Compression"
+    
+    # Full profile
+    log "INFO" "  - full"
+    log "INFO" "    Features: ZFS, Btrfs, Recovery Tools, Network Tools, Crypto, TUI, Compression, Advanced FS, Disk Diagnostics, Network Diagnostics, System Tools, Data Recovery, Boot Repair, Editors, Security"
 }
 
 # Export all functions for use in other scripts
 export -f get_build_profile_name
 export -f apply_build_profile
 export -f list_build_profiles
+export -f set_minimal_profile
+export -f set_standard_profile
+export -f set_full_profile
