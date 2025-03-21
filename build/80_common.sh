@@ -118,11 +118,9 @@ is_restricted_environment() {
     is_github_actions || is_container
 }
 
-# Create a global associative array to track loaded libraries
-declare -A ONEFILELINUX_LIBRARIES_LOADED 2>/dev/null || {
-    # Fallback for older bash versions that don't support associative arrays
-    ONEFILELINUX_LIBRARIES_LOADED=()
-}
+# We'll use a string-based approach for tracking loaded libraries
+# Initialize if not already set
+LIBRARIES_LOADED=${LIBRARIES_LOADED:-""}
 
 # Function to check if a library has been loaded
 is_library_loaded() {
@@ -131,8 +129,8 @@ is_library_loaded() {
     # Extract just the filename without path and extension
     local basename=$(basename "$library_name" .sh)
     
-    # Check if it's in our tracking array
-    if [ "${ONEFILELINUX_LIBRARIES_LOADED[$basename]:-}" = "1" ]; then
+    # Check if it's in our tracking string (with proper word boundaries)
+    if [[ ":${LIBRARIES_LOADED}:" == *":${basename}:"* ]]; then
         return 0  # Already loaded
     fi
     return 1  # Not loaded
@@ -145,11 +143,8 @@ mark_library_loaded() {
     # Extract just the filename without path and extension
     local basename=$(basename "$library_name" .sh)
     
-    # Mark it as loaded in our tracking array 
-    ONEFILELINUX_LIBRARIES_LOADED[$basename]="1"
-    
-    # For backwards compatibility, maintain the string-based tracking
-    if [ -z "${LIBRARIES_LOADED:-}" ]; then
+    # Add to the colon-separated list with proper boundaries
+    if [ -z "${LIBRARIES_LOADED}" ]; then
         export LIBRARIES_LOADED="$basename"
     else
         export LIBRARIES_LOADED="$LIBRARIES_LOADED:$basename"
@@ -202,10 +197,26 @@ source_libraries() {
     
     # Error handling (required)
     if source_library "$script_path/81_error_handling.sh"; then
-        # Initialize error handling if available - the function itself handles deduplication
-        init_error_handling
+        # Initialize error handling if available - check that function exists first
+        if declare -f init_error_handling >/dev/null 2>&1; then
+            init_error_handling
+        else
+            echo -e "${YELLOW}[WARNING]${NC} Error handling function not available. This may cause issues."
+        fi
     else
         echo -e "${YELLOW}[WARNING]${NC} Error handling is limited"
+    fi
+    
+    # Build profiles library (if available) - LOAD THIS FIRST
+    # so that profile functions are available to other libraries
+    if [ -f "$script_path/86_build_profiles.sh" ]; then
+        # Ensure it's executable
+        if [ ! -x "$script_path/86_build_profiles.sh" ]; then
+            chmod +x "$script_path/86_build_profiles.sh" 2>/dev/null || 
+                echo -e "${YELLOW}[WARNING]${NC} Could not make build profiles library executable"
+        fi
+        
+        source_library "$script_path/86_build_profiles.sh"
     fi
     
     # Build helpers

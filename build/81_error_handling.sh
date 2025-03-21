@@ -125,6 +125,64 @@ trap_errors() {
     trap 'handle_error ${LINENO} "${BASH_COMMAND}"' ERR
 }
 
+# Check if prerequisites are met for this specific script
+check_prerequisites() {
+    case "$SCRIPT_NAME" in
+        "01_get.sh")
+            # Check for wget
+            if ! command -v wget &> /dev/null; then
+                log "ERROR" "wget not found. Install wget and try again."
+                log "INFO" "Run ./00_prepare.sh to install required dependencies."
+                exit 1
+            fi
+            ;;
+        "02_chrootandinstall.sh")
+            # Check for chroot capability
+            if [ "$EUID" -ne 0 ]; then
+                log "ERROR" "This script requires root/sudo privileges for chroot."
+                log "INFO" "Run with sudo: sudo ./02_chrootandinstall.sh"
+                exit 1
+            fi
+            
+            # Check if minirootfs exists
+            if [ ! -d "alpine-minirootfs" ]; then
+                log "ERROR" "alpine-minirootfs directory not found."
+                log "INFO" "Run ./01_get.sh first to download Alpine Linux."
+                exit 1
+            fi
+            ;;
+        "03_conf.sh")
+            # Check if minirootfs exists
+            if [ ! -d "alpine-minirootfs" ]; then
+                log "ERROR" "alpine-minirootfs directory not found."
+                log "INFO" "Run ./01_get.sh and ./02_chrootandinstall.sh first."
+                exit 1
+            fi
+            
+            # Check if zfiles exists
+            if [ ! -d "zfiles" ]; then
+                log "ERROR" "zfiles directory not found."
+                exit 1
+            fi
+            ;;
+        "04_build.sh")
+            # Check if kernel source exists
+            if [ ! -d "linux" ]; then
+                log "ERROR" "linux directory not found."
+                log "INFO" "Run ./01_get.sh first to download Linux kernel."
+                exit 1
+            fi
+            
+            # Check for build tools
+            if ! command -v make &> /dev/null; then
+                log "ERROR" "make not found. Install build tools and try again."
+                log "INFO" "Run ./00_prepare.sh to install required dependencies."
+                exit 1
+            fi
+            ;;
+    esac
+}
+
 # Use a global variable to ensure we only initialize once per session
 ONEFILELINUX_ERROR_HANDLING_INITIALIZED=${ONEFILELINUX_ERROR_HANDLING_INITIALIZED:-false}
 
@@ -169,3 +227,9 @@ init_error_handling() {
     # We'll let the main script handle printing the banner
     # This avoids duplicate banners when scripts call initialize_script
 }
+
+# Export key functions for use in other scripts
+export -f init_error_handling
+export -f handle_error
+export -f trap_errors
+export -f check_prerequisites

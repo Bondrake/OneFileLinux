@@ -839,59 +839,46 @@ parse_build_flags() {
                 echo "DEBUG: parse_build_flags detected --minimal flag, applying minimal configuration" >&2
                 _temp_log "Detected --minimal flag, applying minimal configuration"
                 
-                # Apply minimal configuration directly
+                # Apply minimal configuration using the library function
                 if type -t set_minimal_profile &>/dev/null; then
                     # Use the dedicated function from build_profiles if available
                     echo "DEBUG: Using set_minimal_profile function from profiles library" >&2
                     set_minimal_profile
                     echo "DEBUG: Successfully applied minimal profile using dedicated function" >&2
-                else
-                    # Fall back to directly setting variables
-                    _include_minimal_kernel=true
-                    _include_zfs=false
-                    _include_btrfs=false
-                    _include_recovery_tools=false
-                    _include_network_tools=false
-                    _include_crypto=false
-                    _include_tui=false
-                    _include_advanced_fs=false
-                    _include_disk_diag=false
-                    _include_network_diag=false
-                    _include_system_tools=false
-                    _include_data_recovery=false
-                    _include_boot_repair=false
-                    _include_editors=false
-                    _include_security=false
-                    echo "DEBUG: Applied minimal profile using direct variable setting" >&2
+                fi
+                ;;
+            --standard)
+                echo "DEBUG: parse_build_flags detected --standard flag, applying standard configuration" >&2
+                _temp_log "Detected --standard flag, applying standard configuration"
+                
+                # Apply standard configuration using the library function
+                if type -t set_standard_profile &>/dev/null; then
+                    # Use the dedicated function from build_profiles if available
+                    echo "DEBUG: Using set_standard_profile function from profiles library" >&2
+                    set_standard_profile
+                    echo "DEBUG: Successfully applied standard profile using dedicated function" >&2
                 fi
                 ;;
             --full)
                 echo "DEBUG: parse_build_flags detected --full flag, applying full configuration" >&2
                 _temp_log "Detected --full flag, applying full configuration"
                 
-                # Apply full configuration directly
+                # Apply full configuration using the library function
                 if type -t set_full_profile &>/dev/null; then
                     # Use the dedicated function from build_profiles if available
                     set_full_profile
                     echo "DEBUG: Applied full profile using dedicated function" >&2
-                else
-                    # Fall back to directly setting variables
-                    _include_minimal_kernel=false
-                    _include_zfs=true
-                    _include_btrfs=true
-                    _include_recovery_tools=true
-                    _include_network_tools=true
-                    _include_crypto=true
-                    _include_tui=true
-                    _include_advanced_fs=true
-                    _include_disk_diag=true
-                    _include_network_diag=true
-                    _include_system_tools=true
-                    _include_data_recovery=true
-                    _include_boot_repair=true
-                    _include_editors=true
-                    _include_security=true
-                    echo "DEBUG: Applied full profile using direct variable setting" >&2
+                fi
+                ;;
+            --profile=*)
+                profile_name="${flag#*=}"
+                echo "DEBUG: parse_build_flags detected --profile=$profile_name flag" >&2
+                _temp_log "Detected --profile=$profile_name flag, applying profile"
+                
+                # Use apply_build_profile from the build_profiles library
+                if type -t apply_build_profile &>/dev/null; then
+                    echo "DEBUG: Using apply_build_profile function to apply $profile_name profile" >&2
+                    apply_build_profile "$profile_name"
                 fi
                 ;;
             --minimal-kernel)

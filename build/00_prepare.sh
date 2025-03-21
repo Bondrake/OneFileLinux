@@ -49,7 +49,21 @@ check_system_resources() {
     log "INFO" "Checking system resources..."
     
     # Check available memory
-    if [ -f /proc/meminfo ]; then
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS memory check (using sysctl)
+        local mem_total=$(sysctl -n hw.memsize 2>/dev/null)
+        if [ -n "$mem_total" ]; then
+            local mem_gb=$(awk "BEGIN {printf \"%.1f\", $mem_total/1024/1024/1024}")
+            log "INFO" "Available memory: ${mem_gb}GB"
+            if (( $(echo "$mem_gb < 2.0" | bc -l) )); then
+                log "WARNING" "Low memory detected. Build might be slow or fail."
+                log "INFO" "Recommended: At least 2GB of RAM"
+            fi
+        else
+            log "WARNING" "Could not detect available memory on macOS"
+        fi
+    elif [ -f /proc/meminfo ]; then
+        # Linux memory check
         local mem_total=$(grep MemTotal /proc/meminfo | awk '{print $2}')
         local mem_gb=$(awk "BEGIN {printf \"%.1f\", $mem_total/1024/1024}")
         
@@ -58,14 +72,23 @@ check_system_resources() {
             log "WARNING" "Low memory detected. Build might be slow or fail."
             log "INFO" "Recommended: At least 2GB of RAM"
         fi
+    else
+        log "WARNING" "Could not detect available memory"
     fi
     
     # Check available disk space
     local build_dir=$(pwd)
-    local available_space=$(df -BG $build_dir | awk 'NR==2 {print $4}' | sed 's/G//')
+    
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS disk space check
+        local available_space=$(df -h $build_dir | awk 'NR==2 {print $4}' | sed 's/Gi//')
+    else
+        # Linux disk space check
+        local available_space=$(df -BG $build_dir | awk 'NR==2 {print $4}' | sed 's/G//')
+    fi
     
     log "INFO" "Available disk space: ${available_space}GB"
-    if (( $(echo "$available_space < 10" | bc -l) )); then
+    if [ -n "$available_space" ] && (( $(echo "$available_space < 10" | bc -l) )); then
         log "WARNING" "Low disk space. At least 10GB recommended."
         log "INFO" "The build process requires approximately 5GB, but more is recommended."
     fi
@@ -191,24 +214,133 @@ main() {
             fi
             ;;
         "macOS")
-            log "WARNING" "macOS detected. You need a Linux environment to build OneFileLinux."
-            log "INFO" "We recommend using Docker or a Linux VM. See the README for details."
+            log "WARNING" "⚠️  Building on macOS is EXPERIMENTAL and not fully supported ⚠️"
+            log "WARNING" "Full kernel builds will fail on macOS without a cross-compiler"
+            log "INFO" "For production builds, please use Docker: cd $(pwd)/../docker && ./build-onefilelinux.sh"
             log "INFO" ""
-            log "INFO" "For Docker, you can use:"
-            log "INFO" "  docker run -it --rm -v $(pwd)/..:/build ubuntu:latest bash"
-            log "INFO" "  cd /build/build && ./00_prepare.sh"
-            log "INFO" ""
-            log "INFO" "If you have homebrew installed, we can install wget which is needed for downloading:"
-            if command -v brew &> /dev/null; then
-                read -p "Install wget using Homebrew? [y/N] " -n 1 -r
+            
+            # Check for Homebrew
+            if ! command -v brew &> /dev/null; then
+                log "WARNING" "Homebrew not detected. This is strongly recommended for macOS builds."
+                log "INFO" "Install Homebrew with: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+                read -p "Do you want to continue without Homebrew? [y/N] " -n 1 -r
                 echo
-                if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    brew install wget
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    log "INFO" "Exiting. Please install Homebrew and run this script again."
+                    exit 0
                 fi
             else
-                log "INFO" "Homebrew not detected. Please install wget manually if needed."
+                # Homebrew is installed, check/install required packages
+                log "SUCCESS" "Homebrew detected: $(brew --version | head -1 | awk '{print $2}')"
+                
+                # Check Bash version
+                BASH_VERSION=$(bash --version | head -1 | awk '{print $4}' | cut -d'.' -f1)
+                if [[ $BASH_VERSION -lt 4 ]]; then
+                    log "WARNING" "Bash version less than 4.0 detected: $BASH_VERSION"
+                    log "INFO" "Newer Bash is required for associative arrays."
+                    read -p "Install Bash 4+ with Homebrew? [Y/n] " -n 1 -r
+                    echo
+                    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                        brew install bash
+                        log "SUCCESS" "Bash installed. Please use /usr/local/bin/bash to run the build scripts."
+                        log "INFO" "Example: /usr/local/bin/bash build.sh"
+                    else
+                        log "WARNING" "Continuing without Bash 4+. The build may fail."
+                    fi
+                else
+                    log "SUCCESS" "Bash version OK: $BASH_VERSION+"
+                fi
+                
+                # Check for GNU Make 4.0+
+                MAKE_INSTALLED=false
+                if command -v gmake &> /dev/null; then
+                    GMAKE_VERSION=$(gmake --version | head -1 | awk '{print $3}')
+                    log "SUCCESS" "GNU Make detected: $GMAKE_VERSION"
+                    MAKE_INSTALLED=true
+                else
+                    log "WARNING" "GNU Make 4.0+ not found. This is required for kernel compilation."
+                    read -p "Install GNU Make with Homebrew? [Y/n] " -n 1 -r
+                    echo
+                    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                        brew install make
+                        log "SUCCESS" "GNU Make installed as 'gmake'"
+                        MAKE_INSTALLED=true
+                    else
+                        log "WARNING" "Continuing without GNU Make 4.0+. Kernel build will fail."
+                    fi
+                fi
+                
+                # Check for wget (needed for downloads)
+                if ! command -v wget &> /dev/null; then
+                    log "WARNING" "wget not found. This is needed for downloading sources."
+                    read -p "Install wget with Homebrew? [Y/n] " -n 1 -r
+                    echo
+                    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                        brew install wget
+                        log "SUCCESS" "wget installed"
+                    else
+                        log "WARNING" "Continuing without wget. Downloads may fail."
+                    fi
+                else
+                    log "SUCCESS" "wget detected: $(wget --version | head -1 | awk '{print $3}')"
+                fi
+                
+                # Install other helpful utilities
+                log "INFO" "Checking for other helpful utilities..."
+                MISSING_UTILS=()
+                
+                for util in coreutils findutils grep; do
+                    if ! brew list --formula | grep -q "^$util\$"; then
+                        MISSING_UTILS+=($util)
+                    fi
+                done
+                
+                if [ ${#MISSING_UTILS[@]} -gt 0 ]; then
+                    log "INFO" "Some helpful GNU utilities are missing: ${MISSING_UTILS[*]}"
+                    read -p "Install these utilities with Homebrew? [Y/n] " -n 1 -r
+                    echo
+                    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                        brew install ${MISSING_UTILS[*]}
+                        log "SUCCESS" "GNU utilities installed"
+                    else
+                        log "WARNING" "Missing GNU utilities may cause build issues."
+                        log "INFO" "Install them later with: brew install ${MISSING_UTILS[*]}"
+                    fi
+                else
+                    log "SUCCESS" "GNU findutils and grep detected"
+                fi
+                
+                # Add GNU tools to path
+                if brew --prefix findutils &>/dev/null || brew --prefix grep &>/dev/null; then
+                    log "INFO" "Adding GNU tools to PATH with higher priority"
+                    export PATH="$(brew --prefix)/opt/findutils/libexec/gnubin:$(brew --prefix)/opt/grep/libexec/gnubin:$PATH"
+                fi
             fi
-            exit 0
+            
+            # Provide important guidance for MacOS builds
+            log "INFO" ""
+            log "INFO" "For development/testing on macOS:"
+            log "INFO" "  1. Use --dry-run to test configurations: ./build.sh build -- --minimal --dry-run"
+            
+            if [ "$MAKE_INSTALLED" = true ]; then
+                log "INFO" "  2. You can use ./build.sh for parameter testing (gmake will be used automatically)"
+            else
+                log "INFO" "  2. Install GNU Make 4.0+: brew install make"
+            fi
+            
+            log "INFO" "  3. For actual builds, use Docker as described above"
+            log "INFO" ""
+            
+            # Ask if user wants to continue
+            read -p "Continue with preparation? [Y/n] " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Nn]$ ]]; then
+                log "INFO" "Exiting preparation. Consider using Docker for full builds."
+                exit 0
+            fi
+            
+            # Continue with the script
+            log "INFO" "Continuing with macOS preparation..."
             ;;
         *)
             log "ERROR" "Unsupported or unknown OS: $OS"
