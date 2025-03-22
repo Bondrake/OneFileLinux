@@ -4,6 +4,23 @@
 ;; First, load ASDF
 (require :asdf)
 
+;; Ensure Quicklisp is loaded and dependencies are available
+(let ((quicklisp-init (merge-pathnames "quicklisp/setup.lisp" 
+                                     (user-homedir-pathname))))
+  (if (probe-file quicklisp-init)
+      (progn
+        (format t "~%Loading Quicklisp...~%")
+        (load quicklisp-init)
+        
+        ;; Make sure required libraries are loaded first
+        (format t "~%Ensuring dependencies are loaded...~%")
+        (let ((*standard-output* *standard-output*)) ; Keep output visible
+          (funcall (read-from-string "ql:quickload") :uiop)
+          (funcall (read-from-string "ql:quickload") :cl-ppcre)
+          (funcall (read-from-string "ql:quickload") :alexandria))
+        (format t "Dependencies loaded successfully~%"))
+      (format t "~%WARNING: Quicklisp not found at ~A~%" quicklisp-init)))
+
 ;; Explicitly register the system in the current directory
 (let ((base-dir (uiop:getcwd)))
   ;; Add current directory to ASDF search paths

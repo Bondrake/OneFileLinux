@@ -352,14 +352,17 @@ install_dependencies() {
     # Build QL load expressions
     load_expressions=""
     for lib in "${CL_LIBS[@]}"; do
-        load_expressions="${load_expressions} --eval '(ql:quickload :$lib)'"
+        load_expressions="${load_expressions} --eval '(ql:quickload :$lib :verbose t)'"
     done
     
     # Use eval to execute the dynamic command
+    echo "Loading dependencies: ${CL_LIBS[*]}"
     eval "sbcl --noinform --non-interactive \
         --eval '(require :asdf)' \
         --eval '(load \"~/.quicklisp/setup.lisp\")' \
+        --eval '(setf ql:*quickload-verbose* t)' \
         $load_expressions \
+        --eval '(format t \"~%All dependencies loaded successfully~%\")' \
         --eval '(quit)'"
 }
 
