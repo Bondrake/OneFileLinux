@@ -13,11 +13,13 @@
    (:file "config" :depends-on ("core"))
    (:file "build" :depends-on ("core" "config"))
    (:module "kernel"
+    :depends-on ("core" "config")
     :components
-    ((:file "config-utils" :depends-on ("core" "config"))))
+    ((:file "config-utils")))
    (:module "package"
+    :depends-on ("core" "config")
     :components
-    ((:file "apk-builder" :depends-on ("core" "config"))))
+    ((:file "apk-builder")))
    (:module "steps"
     :depends-on ("core" "config" "build" "kernel" "package")
     :components
