@@ -33,20 +33,7 @@
     :components
     ((:file "actions-helper" :depends-on ("../core" "../config"))))))
 
-;; Register system for ASDF
-(asdf:register-system-definition "onefilelinux" (pathname "onefilelinux.asd"))
-
 ;; Define package aliases for backwards compatibility
 (defpackage :onefilelinux.util
   (:use :cl)
   (:documentation "Compatibility package for older code"))
-
-;; Define in-package hierarchy for documentation tools
-(asdf:register-system-definition "onefilelinux/core" (pathname "core.lisp"))
-(asdf:register-system-definition "onefilelinux/config" (pathname "config.lisp"))
-(asdf:register-system-definition "onefilelinux/build" (pathname "build.lisp"))
-(asdf:register-system-definition "onefilelinux/steps" (pathname "steps/"))
-(asdf:register-system-definition "onefilelinux/kernel" (pathname "kernel/"))
-(asdf:register-system-definition "onefilelinux/package" (pathname "package/"))
-(asdf:register-system-definition "onefilelinux/docker" (pathname "docker/"))
-(asdf:register-system-definition "onefilelinux/github" (pathname "github/"))
