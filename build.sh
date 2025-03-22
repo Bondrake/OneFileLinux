@@ -1,6 +1,7 @@
 #!/bin/bash
 # OneFileLinux minimal bootstrapper
 # This script handles dependencies and provides build options
+# It now includes direct support for dry-run mode
 
 set -e  # Exit on error
 
@@ -17,6 +18,8 @@ source "$CONFIG_FILE"
 
 PROJECT_ROOT="$(pwd)"
 BUILD_MODE=""
+DRY_RUN=""
+DRY_RUN_UNTIL=""
 
 # Process command line arguments
 process_args() {

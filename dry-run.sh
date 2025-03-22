@@ -5,5 +5,5 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 cd "$SCRIPT_DIR"
 
-# Run SBCL with the fix-dry-run.lisp file
-sbcl --load "fix-dry-run.lisp" -- --dry-run "$@"
+# Run regular build system with dry-run flag
+sbcl --load "main.lisp" -- --dry-run "$@"

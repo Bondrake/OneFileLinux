@@ -2,6 +2,23 @@
 ;;;; Main script for loading the system and processing command-line arguments
 
 (require :asdf)
+
+;; Ensure proper dependency loading before loading the ASDF system
+(defun ensure-dependency (name)
+  (handler-case
+      (progn
+        (format t "Loading dependency: ~A~%" name)
+        (asdf:load-system name))
+    (error (e)
+      (format t "Warning: Failed to load ~A: ~A~%" name e)
+      nil)))
+
+;; Load essential dependencies first
+(ensure-dependency :uiop)
+(ensure-dependency :cl-ppcre)
+(ensure-dependency :alexandria)
+
+;; Now load the OneFileLinux system
 (asdf:load-system "onefilelinux")
 
 (defpackage :onefilelinux.main
