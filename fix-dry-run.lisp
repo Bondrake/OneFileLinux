@@ -239,7 +239,10 @@
                  (find-symbol "MAIN" :onefilelinux.main))
             (progn
               (format t "Running via onefilelinux.main:main with args: ~S~%" args)
-              (funcall (find-symbol "MAIN" :onefilelinux.main) args))
+              ;; Ensure we're passing a valid list
+              (if (and (listp args) args)
+                  (funcall (find-symbol "MAIN" :onefilelinux.main) args)
+                  (funcall (find-symbol "MAIN" :onefilelinux.main) nil)))
             (progn
               (format t "Warning: onefilelinux.main:main not found!~%")
               (simulated-main)))

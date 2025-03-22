@@ -285,16 +285,17 @@
 
 (defun parse-arguments (args)
   "Parse command line arguments and update configuration"
-  (let ((separator-index (position "--" args :test #'string=))
-        (regular-args (if separator-index 
-                        (subseq args 0 separator-index) 
-                        args))
-        (passthrough-args (when separator-index 
-                           (subseq args (1+ separator-index))))
-        (step nil)
-        (explicit-profile nil)
-        (dry-run nil)
-        (dry-run-until nil))
+  (let* ((args (or args ()))  ;; Ensure args is not nil
+         (separator-index (position "--" args :test #'string=))
+         (regular-args (if separator-index 
+                         (subseq args 0 separator-index) 
+                         args))
+         (passthrough-args (when separator-index 
+                            (subseq args (1+ separator-index))))
+         (step nil)
+         (explicit-profile nil)
+         (dry-run nil)
+         (dry-run-until nil))
     
     ;; Check for profile args first
     (dolist (arg regular-args)
@@ -495,9 +496,14 @@
 
 (defun main (args)
   "Main entry point for the build system"
-  ;; Parse arguments
-  (multiple-value-bind (step passthrough-args explicit-profile dry-run dry-run-until)
-      (parse-arguments args)
+  ;; Handle nil args case explicitly to avoid errors
+  (setf args (or args ()))
+  (format t "Build main called with args: ~S~%" args)
+  
+  ;; Parse arguments with error handling
+  (handler-case
+      (multiple-value-bind (step passthrough-args explicit-profile dry-run dry-run-until)
+          (parse-arguments args)
     
     (when (null step)
       (when explicit-profile
@@ -525,6 +531,10 @@
       (if (eq step :all)
           (run-build context)
           (execute-build-step step context))))
+    (error (e)
+      (format t "ERROR in build main: ~A~%" e)
+      (format t "Args were: ~S~%" args)
+      (return-from main 1)))
   
   ;; Return success
   0)

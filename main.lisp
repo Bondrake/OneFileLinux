@@ -64,8 +64,11 @@
     ;; Execute main build function
     (handler-case
         (progn
-          (log-message :info "Starting OneFileLinux build process")
-          (onefilelinux.build:main args)
+          (log-message :info "Starting OneFileLinux build process with args: ~S" args)
+          ;; Ensure we're passing a proper argument list
+          (if (listp args)
+              (onefilelinux.build:main args)
+              (onefilelinux.build:main nil))
           (log-message :info "Build process completed successfully")
           (uiop:quit 0))
       
