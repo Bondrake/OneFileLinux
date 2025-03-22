@@ -70,27 +70,35 @@
 
 (defmacro define-config-schema (name &body fields)
   "Define a configuration schema"
-  `(progn
-     (defstruct ,name
-       ,@(mapcar (lambda (field-def)
-                  (destructuring-bind (field-name &key type default documentation)
-                      field-def
-                    (declare (ignore type))
-                    `(,field-name ,default :read-only nil
-                                :documentation ,documentation)))
-                fields))
-     
-     (setf (gethash ',name *config-schemas*)
-           (make-config-schema 
-            :name ',name
-            :fields ',(mapcar (lambda (field-def)
-                              (destructuring-bind (field-name &key type default documentation)
-                                  field-def
-                                (declare (ignore default))
-                                (list field-name type documentation)))
-                            fields)
-            :validators nil))
-     ',name))
+  ;; Handle the case where first element is a documentation string
+  (let ((doc-string nil)
+        (actual-fields fields))
+    (when (and (stringp (first fields)) (rest fields))
+      (setf doc-string (first fields)
+            actual-fields (rest fields)))
+    
+    `(progn
+       (defstruct ,name
+         ,@(when doc-string (list doc-string))
+         ,@(mapcar (lambda (field-def)
+                    (destructuring-bind (field-name &key type default documentation)
+                        field-def
+                      (declare (ignore type))
+                      `(,field-name ,default :read-only nil
+                                  :documentation ,documentation)))
+                  actual-fields))
+       
+       (setf (gethash ',name *config-schemas*)
+             (make-config-schema 
+              :name ',name
+              :fields ',(mapcar (lambda (field-def)
+                                (destructuring-bind (field-name &key type default documentation)
+                                    field-def
+                                  (declare (ignore default))
+                                  (list field-name type documentation)))
+                              actual-fields)
+              :validators nil))
+       ',name)))
 
 (defmacro define-config-section (name parent &body fields)
   "Define a configuration section that inherits from another"
@@ -703,15 +711,14 @@
 ;;; Helper functions for slot manipulation
 ;;; ===============================
 
+;; SBCL-specific implementation for slot iteration
 (defmacro do-slots ((slot-var object) &body body)
-  "Iterate over all slots of an object"
-  (let ((class-var (gensym "class-"))
-        (slots-var (gensym "slots-")))
-    `(let* ((,class-var (class-of ,object))
-            (,slots-var (closer-mop:class-slots ,class-var)))
-       (dolist (slot-definition ,slots-var)
-         (let ((,slot-var (closer-mop:slot-definition-name slot-definition)))
-           ,@body)))))
+  "Iterate over all slots of an object using SBCL's MOP"
+  (let ((obj-var (gensym "object-")))
+    `(let ((,obj-var ,object))
+       (loop for ,slot-var in (mapcar #'sb-mop:slot-definition-name 
+                                     (sb-mop:class-slots (class-of ,obj-var)))
+             do (progn ,@body)))))
 
 ;;; ===============================
 ;;; Register Default Package Groups

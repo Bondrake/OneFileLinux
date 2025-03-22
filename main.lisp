@@ -20,6 +20,9 @@
 (funcall (read-from-string "ql:quickload") :cl-ppcre :verbose t)
 (funcall (read-from-string "ql:quickload") :alexandria :verbose t)
 
+;; Ensure sb-mop is available (required for config.lisp)
+(require :sb-mop)
+
 ;; Now load the OneFileLinux system
 (format t "Loading OneFileLinux system...~%")
 (funcall (read-from-string "ql:quickload") "onefilelinux" :verbose t)
