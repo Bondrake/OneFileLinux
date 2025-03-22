@@ -12,12 +12,12 @@
 ;;; ----------------------------------------------------
 
 (defclass chrootandinstall-step (build-step)
-  ((name :initform "chroot-and-install"
+  ((name :initform :chroot
          :allocation :class
-         :reader step-name)
+         :reader build-step-name)
    (description :initform "Sets up chroot environment and installs packages"
                 :allocation :class
-                :reader step-description))
+                :reader build-step-description))
   (:documentation "Step to set up chroot environment and install packages."))
 
 (defmethod prepare ((step chrootandinstall-step) (context build-context))
@@ -40,9 +40,16 @@
 (defmethod execute ((step chrootandinstall-step) (context build-context))
   "Execute chroot setup and package installation."
   (with-slots (working-dir config) context
-    (let ((rootfs-dir (path-join working-dir "rootfs"))
-          (arch (config-value config :system :arch "x86_64"))
-          (profile (config-value config :build :profile "minimal")))
+    (let* ((rootfs-dir (path-join working-dir "rootfs"))
+           ;; Fix config-value calls to use proper slot access
+           (system-config (gethash 'system-config config))
+           (build-config (gethash 'build-config config))
+           (arch (if (slot-exists-p system-config 'arch)
+                    (slot-value system-config 'arch)
+                    "x86_64"))
+           (profile (if (slot-exists-p build-config 'profile)
+                       (slot-value build-config 'profile)
+                       "minimal")))
       
       ;; 1. Configure DNS for chroot
       (log-message :info "Setting up DNS for chroot...")
@@ -67,11 +74,15 @@
       (log-message :info "Successfully completed chroot and package installation")))
   t)
 
-(defmethod cleanup ((step chrootandinstall-step) (context build-context))
+(defmethod cleanup ((step chrootandinstall-step) (context build-context) &optional status)
   "Clean up after chroot and package installation."
   (with-slots (working-dir config) context
-    (let ((rootfs-dir (path-join working-dir "rootfs"))
-          (preserve-work (config-value config :build :preserve-work nil)))
+    (let* ((rootfs-dir (path-join working-dir "rootfs"))
+           ;; Fix config-value calls to use proper slot access
+           (build-config (gethash 'build-config config))
+           (preserve-work (if (slot-exists-p build-config 'preserve-work)
+                             (slot-value build-config 'preserve-work)
+                             nil)))
       
       ;; Clean APK cache if not preserving work
       (unless preserve-work
@@ -98,9 +109,15 @@
 
 (defun setup-apk-repositories (rootfs-dir arch)
   "Set up APK repositories configuration."
-  (let ((repositories-file (path-join rootfs-dir "etc/apk/repositories"))
-        (alpine-version (config-value (context-config *build-context*) 
-                                      :system :alpine-version "3.19.1")))
+  (let* ((repositories-file (path-join rootfs-dir "etc/apk/repositories"))
+         ;; Get alpine version safely
+         (alpine-version (if (boundp '*build-context*)
+                            (let* ((config (build-context-config *build-context*))
+                                  (system-config (gethash 'system-config config)))
+                              (if (and system-config (slot-exists-p system-config 'alpine-version))
+                                  (slot-value system-config 'alpine-version)
+                                  "3.19.1"))
+                            "3.19.1")))
     (with-open-file (out repositories-file :direction :output 
                                           :if-exists :supersede 
                                           :if-does-not-exist :create)
@@ -113,7 +130,7 @@
 (defun update-apk-database (rootfs-dir)
   "Update the APK database within the chroot."
   (with-chroot rootfs-dir
-    (run-command "apk" '("update") :capture-output nil)))
+    (run-command "apk" '("update"))))
 
 (defun install-packages (rootfs-dir profile context)
   "Install required packages based on the build profile."
@@ -122,24 +139,41 @@
       (log-message :debug "Installing packages: ~{~A~^, ~}" packages)
       
       (with-chroot rootfs-dir
-        (apply #'run-command 
-               "apk" 
-               (append '("add" "--no-cache") packages)
-               '(:capture-output nil))))))
+        (run-command 
+         "apk" 
+         (append '("add" "--no-cache") packages))))))
 
 (defun resolve-required-packages (profile config)
   "Resolve the list of packages required for the given profile."
-  (let ((base-packages (config-value config :packages :base 
-                                    '("alpine-base" "linux-lts" "alpine-baselayout")))
-        (profile-packages (config-value config :packages profile nil))
-        (feature-packages '()))
+  (let* ((package-config (gethash 'package-config config))
+         (default-packages '("alpine-base" "linux-lts" "alpine-baselayout"))
+         (base-packages 
+           (if (and package-config (slot-exists-p package-config 'base-packages))
+               (slot-value package-config 'base-packages)
+               default-packages))
+         (profile-packages '())
+         (feature-packages '()))
     
-    ;; Gather packages from enabled features
-    (let ((enabled-features (config-value config :features :enabled nil)))
-      (dolist (feature enabled-features)
-        (let ((feature-pkgs (config-value config :packages feature nil)))
-          (when feature-pkgs
-            (setf feature-packages (append feature-packages feature-pkgs))))))
+    ;; Try to get profile packages if they exist
+    (when (and package-config 
+              (slot-exists-p package-config 'profile-packages)
+              (slot-value package-config 'profile-packages))
+      (let ((profiles (slot-value package-config 'profile-packages)))
+        (when (and (listp profiles) (getf profiles (intern (string-upcase profile) :keyword)))
+          (setf profile-packages (getf profiles (intern (string-upcase profile) :keyword))))))
+    
+    ;; Try to get feature packages
+    (let ((feature-config (gethash 'feature-config config)))
+      (when (and feature-config (slot-exists-p feature-config 'enabled-features))
+        (let ((enabled-features (slot-value feature-config 'enabled-features)))
+          (dolist (feature enabled-features)
+            (when (and package-config 
+                      (slot-exists-p package-config 'feature-packages)
+                      (slot-value package-config 'feature-packages))
+              (let* ((feature-pkgs-table (slot-value package-config 'feature-packages))
+                    (feature-pkgs (getf feature-pkgs-table feature)))
+                (when feature-pkgs
+                  (setf feature-packages (append feature-packages feature-pkgs)))))))))
     
     ;; Combine all package sets, removing duplicates
     (remove-duplicates 
@@ -154,25 +188,28 @@
   
   ;; Configure default runlevel services
   (with-chroot rootfs-dir
-    (run-command "rc-update" '("add" "devfs" "sysinit") :capture-output nil)
-    (run-command "rc-update" '("add" "dmesg" "sysinit") :capture-output nil)
-    (run-command "rc-update" '("add" "mdev" "sysinit") :capture-output nil)))
+    (run-command "rc-update" '("add" "devfs" "sysinit"))
+    (run-command "rc-update" '("add" "dmesg" "sysinit"))
+    (run-command "rc-update" '("add" "mdev" "sysinit"))))
 
 (defun clean-apk-cache (rootfs-dir)
   "Clean the APK cache in the chroot environment."
   (with-chroot rootfs-dir
-    (run-command "rm" '("-rf" "/var/cache/apk/*") :capture-output nil)))
+    (run-command "rm" '("-rf" "/var/cache/apk/*"))))
 
 (defun safe-unmount-special (rootfs-dir)
   "Safely unmount any special filesystems that might be mounted."
   (dolist (special '("dev" "proc" "sys"))
     (let ((mount-point (path-join rootfs-dir special)))
       (when (is-mounted-p mount-point)
-        (run-command "umount" (list "-f" mount-point) :capture-output nil)))))
+        (run-command "umount" (list "-f" mount-point))))))
 
 (defun is-mounted-p (path)
   "Check if a path is currently mounted."
-  (let ((result (run-command-status "mountpoint" (list "-q" path))))
+  (let ((result (multiple-value-bind (output exit-code)
+                    (run-command "mountpoint" (list "-q" path) :ignore-error t)
+                  (declare (ignore output))
+                  exit-code)))
     (= result 0)))
 
 ;;; ----------------------------------------------------
