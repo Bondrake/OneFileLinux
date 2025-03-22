@@ -30,12 +30,12 @@
     (format t "~A ~A (~A)~%" os-name os-version os-type))
   (format t "~%"))
 
-(defun main ()
+(defun main (&optional args)
   "Main entry point for the build system"
   (display-banner)
   
   ;; Process command-line arguments
-  (let ((args (uiop:command-line-arguments)))
+  (let ((args (or args (uiop:command-line-arguments))))
     ;; Check for version and help flags first
     (when (member "--version" args :test #'string=)
       (display-version)

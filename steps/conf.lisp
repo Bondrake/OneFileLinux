@@ -72,7 +72,7 @@
       (log-message :info "Successfully completed system configuration")))
   t)
 
-(defmethod cleanup ((step conf-step) (context build-context))
+(defmethod cleanup ((step conf-step) (context build-context) status)
   "Clean up after system configuration."
   (with-slots (working-dir config) context
     (let ((rootfs-dir (path-join working-dir "rootfs"))
@@ -349,7 +349,7 @@
 
 (defun register-conf-step ()
   "Register the conf step with the build system."
-  (register-build-step "conf" #'make-conf-step))
+  (onefilelinux.build:register-build-step :conf (make-conf-step)))
 
 ;; Auto-register when the package is loaded
 (eval-when (:load-toplevel :execute)

@@ -12,16 +12,16 @@
 ;;; Build Step Implementation - Build
 ;;; ----------------------------------------------------
 
-(defclass build-step (build-step)
-  ((name :initform "build"
+(defclass build-kernel-step (onefilelinux.build:build-step)
+  ((name :initform :build
          :allocation :class
-         :reader step-name)
+         :reader build-step-name)
    (description :initform "Builds the kernel and creates the final EFI file"
                 :allocation :class
-                :reader step-description))
+                :reader build-step-description))
   (:documentation "Step to build the kernel and create the final EFI file."))
 
-(defmethod prepare ((step build-step) (context build-context))
+(defmethod prepare ((step build-kernel-step) (context build-context))
   "Prepare for kernel building and EFI creation."
   (with-slots (working-dir) context
     (let ((rootfs-dir (path-join working-dir "rootfs"))
@@ -44,7 +44,7 @@
       (log-message :info "Prepared environment for kernel building and EFI creation")))
   t)
 
-(defmethod execute ((step build-step) (context build-context))
+(defmethod execute ((step build-kernel-step) (context build-context))
   "Execute kernel building and EFI creation."
   (with-slots (working-dir config) context
     (let ((rootfs-dir (path-join working-dir "rootfs"))
@@ -78,7 +78,7 @@
       (log-message :info "Successfully completed build process")))
   t)
 
-(defmethod cleanup ((step build-step) (context build-context))
+(defmethod cleanup ((step build-kernel-step) (context build-context) status)
   "Clean up after kernel building and EFI creation."
   (with-slots (working-dir config) context
     (let ((preserve-work (config-value config :build :preserve-work nil)))
@@ -370,12 +370,12 @@
 ;;; ----------------------------------------------------
 
 (defun make-build-step ()
-  "Create a new instance of the build-step."
-  (make-instance 'build-step))
+  "Create a new instance of the build-kernel-step."
+  (make-instance 'build-kernel-step))
 
 (defun register-build-step ()
   "Register the build step with the build system."
-  (register-build-step "build" #'make-build-step))
+  (onefilelinux.build:register-build-step :build (make-build-step)))
 
 ;; Auto-register when the package is loaded
 (eval-when (:load-toplevel :execute)
