@@ -32,7 +32,7 @@
     :depends-on ("core" "config" "build")
     :components
     ((:file "build-onefilelinux")
-     (:file "auto-resources" :depends-on ("core"))))
+     (:file "auto-resources")))
    (:module "github"
     :depends-on ("core" "config")
     :components
