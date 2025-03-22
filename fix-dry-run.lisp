@@ -155,34 +155,31 @@
 ;; Add current directory to ASDF search paths  
 (push *base-dir* asdf:*central-registry*)
 
-;; Try normal ASDF loading first
-(format t "~%Loading system...~%")
-(handler-case
-    (progn
-      ;; First try loading the ASD file directly
-      (safe-load (merge-pathnames "onefilelinux.asd" *base-dir*))
-      
-      ;; Then load the system with ASDF
-      (format t "Trying to load onefilelinux system with ASDF...~%")
-      (asdf:load-system "onefilelinux" :verbose t))
-  (error (e)
-    (format t "~%ASDF loading failed: ~A~%" e)
-    (format t "~%Falling back to manual file loading...~%")
+;; Skip ASDF loading altogether and go straight to manual loading
+(format t "~%Loading system files directly...~%")
     
-    ;; Load each file with error handling
-    (safe-load (merge-pathnames "core.lisp" *base-dir*))
-    (safe-load (merge-pathnames "config.lisp" *base-dir*))
-    (safe-load (merge-pathnames "build.lisp" *base-dir*))
-    
-    ;; Load step definitions in order
-    (safe-load (merge-pathnames "steps/prepare.lisp" *base-dir*))
-    (safe-load (merge-pathnames "steps/get.lisp" *base-dir*))
-    (safe-load (merge-pathnames "steps/chrootandinstall.lisp" *base-dir*))
-    (safe-load (merge-pathnames "steps/conf.lisp" *base-dir*))
-    (safe-load (merge-pathnames "steps/build.lisp" *base-dir*))
-    
-    ;; Load main file last
-    (safe-load (merge-pathnames "main.lisp" *base-dir*))))
+;; Load core files first in the correct order
+(format t "Loading core libraries...~%")
+(safe-load (merge-pathnames "core.lisp" *base-dir*))
+(safe-load (merge-pathnames "config.lisp" *base-dir*))
+(safe-load (merge-pathnames "build.lisp" *base-dir*))
+
+;; Load kernel and package modules before steps that might depend on them
+(format t "Loading kernel and package modules...~%")
+(safe-load (merge-pathnames "kernel/config-utils.lisp" *base-dir*))
+(safe-load (merge-pathnames "package/apk-builder.lisp" *base-dir*))
+
+;; Load step definitions in order
+(format t "Loading build steps...~%")
+(safe-load (merge-pathnames "steps/prepare.lisp" *base-dir*))
+(safe-load (merge-pathnames "steps/get.lisp" *base-dir*))
+(safe-load (merge-pathnames "steps/chrootandinstall.lisp" *base-dir*))
+(safe-load (merge-pathnames "steps/conf.lisp" *base-dir*))
+(safe-load (merge-pathnames "steps/build.lisp" *base-dir*))
+
+;; Load main file last
+(format t "Loading main...~%")
+(safe-load (merge-pathnames "main.lisp" *base-dir*))
 
 ;; Define a minimal dry run implementation in case loading fails
 (format t "~%Defining minimal dry run capability...~%")
