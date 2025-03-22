@@ -15,18 +15,22 @@ OneFileLinux can be built in multiple ways:
 
 - Git (to clone the repository)
 
-### Local Build Requirements
-
-- Linux operating system (direct builds require Linux)
+That's it! The `build.sh` script will automatically detect and install all other dependencies based on your system, including:
 - SBCL (Steel Bank Common Lisp)
 - Quicklisp (Common Lisp package manager)
-- Required libraries: uiop, cl-ppcre, alexandria
-- Build dependencies (gcc, make, etc.) - automatically installed by the build script
+- Required libraries (uiop, cl-ppcre, alexandria, etc.)
+- Build tools (gcc, make, etc.)
+- Docker/Podman (if needed and not already installed)
 
-### Container Build Requirements
+### Local Build Environment
 
-- Docker Engine OR Podman
+- Linux operating system (direct builds require Linux)
+- Root/sudo access (for installing dependencies)
+
+### Container Build Environment
+
 - Any operating system that supports Docker/Podman (Linux, macOS, Windows)
+- Docker Engine OR Podman
 - No other dependencies needed (all are contained in the container image)
 
 > **Important Note**: macOS and Windows users can only use the container-based build method. Direct SBCL builds are only supported on Linux due to kernel building requirements and system-specific dependencies.
@@ -147,6 +151,34 @@ Both local and container builds support these options:
 --help               Display help message
 ```
 
+### Dry Run Mode
+
+OneFileLinux supports a "dry run" mode which simulates the build process without executing resource-intensive steps:
+
+```
+--dry-run            Run in dry run mode (simulation only)
+--dry-run-until=STEP Run until the specified step (prepare, get, chroot, conf, build)
+--list-steps         List all available build steps
+```
+
+For example:
+
+```bash
+# Simulate full build process
+./build.sh --dry-run
+
+# Execute up to preparation step only
+./build.sh --dry-run-until=prepare
+
+# Execute up to source download only
+./build.sh --dry-run-until=get
+
+# Execute up to configuration step
+./build.sh --dry-run-until=conf
+```
+
+See [Dry Run Feature](dry-run-feature.md) for more detailed information.
+
 ## Troubleshooting
 
 ### Common Issues
@@ -157,13 +189,32 @@ Both local and container builds support these options:
 
 2. **Missing Libraries**:
    - Run the build.sh setup script again to install dependencies
+   - If specific libraries are missing, run `./build.sh --verbose` to see detailed error messages
 
 3. **Memory/CPU Limitations**:
    - For container builds, specify resource limits with --cpu and --memory options
+   - For kernel build failures, try increasing available memory or use a container build
 
 4. **Docker/Podman Group Membership**:
    - If you get permission denied errors, make sure your user is in the docker group
    - Run: `sudo usermod -aG docker $(whoami)` and then `newgrp docker`
+
+### Using Dry Run for Debugging
+
+The dry run feature is useful for troubleshooting build issues:
+
+```bash
+# Test system setup and dependencies
+./build.sh --dry-run-until=prepare --verbose
+
+# Debug source download issues
+./build.sh --dry-run-until=get --verbose
+
+# Isolate configuration problems
+./build.sh --dry-run-until=conf --verbose
+```
+
+This allows you to focus on specific build stages without going through the entire build process.
 
 ## Output Files
 

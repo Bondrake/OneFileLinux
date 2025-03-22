@@ -27,6 +27,8 @@
    #:build-context-start-time
    #:build-context-verbose
    #:build-context-timing
+   #:build-context-dry-run
+   #:build-context-dry-run-until
    
    ;; Build execution
    #:execute-build-step
@@ -99,7 +101,9 @@
   (args nil :type list)
   (start-time 0 :type integer)
   (verbose nil :type boolean)
-  (timing (make-hash-table :test 'eq) :type hash-table))
+  (timing (make-hash-table :test 'eq) :type hash-table)
+  (dry-run nil :type boolean)
+  (dry-run-until nil :type (or symbol null)))
 
 ;;; ===============================
 ;;; Build Execution
@@ -192,14 +196,32 @@
     (log-message :info "Starting OneFileLinux build process")
     (when (build-context-verbose context)
       (log-message :info "Verbose mode enabled"))
+    (when (build-context-dry-run context)
+      (log-message :info "Dry run mode enabled~A" 
+                 (if (build-context-dry-run-until context)
+                     (format nil ", running until step: ~A" (build-context-dry-run-until context))
+                     "")))
     
     ;; Execute steps in order
     (loop for step-name in steps
-          for status = (execute-build-step step-name context)
-          unless status
-          do (progn
-               (log-message :error "Build failed at step: ~A" step-name)
-               (return-from run-build nil)))
+          for should-skip = (and (build-context-dry-run context)
+                               (build-context-dry-run-until context)
+                               (let ((step-pos (position step-name steps))
+                                     (target-pos (position (build-context-dry-run-until context) steps)))
+                                 (and target-pos step-pos (> step-pos target-pos))))
+          do (cond 
+               (should-skip
+                (log-message :info "Skipping build step ~A (dry run)" step-name))
+               (t 
+                (let ((status (execute-build-step step-name context)))
+                  (unless status
+                    (log-message :error "Build failed at step: ~A" step-name)
+                    (return-from run-build nil))
+                  (when (and (build-context-dry-run context)
+                           (build-context-dry-run-until context)
+                           (eq step-name (build-context-dry-run-until context)))
+                    (log-message :info "Dry run completed - reached target step: ~A" step-name)
+                    (return-from run-build t))))))
     
     ;; Calculate and report build time
     (let* ((build-end-time (get-universal-time))
@@ -207,12 +229,17 @@
            (minutes (floor build-duration 60))
            (seconds (mod build-duration 60)))
       
-      (log-message :success "Build completed successfully!")
-      (log-message :info "Total build time: ~Am ~As" minutes seconds)
+      (if (build-context-dry-run context)
+          (log-message :success "Dry run completed successfully!")
+          (log-message :success "Build completed successfully!"))
+      (log-message :info "Total ~Atime: ~Am ~As" 
+                 (if (build-context-dry-run context) "dry run " "build ")
+                 minutes seconds)
       
       ;; Report individual step times
       (when (build-context-verbose context)
-        (log-message :info "Build step timing:")
+        (log-message :info "~A step timing:" 
+                   (if (build-context-dry-run context) "Dry run" "Build"))
         (maphash (lambda (step-name duration)
                   (log-message :info "  ~A: ~As" step-name duration))
                 (build-context-timing context)))
@@ -233,6 +260,10 @@
   (format t "  -v, --verbose       Enable verbose output~%")
   (format t "  -s, --skip-prepare  Skip preparation step~%")
   (format t "  -C, --clean-end     Clean after building~%~%")
+  (format t "Dry Run Options:~%")
+  (format t "  --dry-run           Run in dry run mode (no actual build)~%")
+  (format t "  --dry-run-until=STEP Dry run up to and including specified step~%")
+  (format t "  --list-steps        List available build steps~%~%")
   (format t "Build Profiles:~%")
   (format t "  --minimal           Minimal profile (no ZFS, smallest size)~%")
   (format t "  --standard          Standard profile (default)~%")
@@ -261,7 +292,9 @@
         (passthrough-args (when separator-index 
                            (subseq args (1+ separator-index))))
         (step nil)
-        (explicit-profile nil))
+        (explicit-profile nil)
+        (dry-run nil)
+        (dry-run-until nil))
     
     ;; Check for profile args first
     (dolist (arg regular-args)
@@ -285,7 +318,7 @@
         ;; Help
         ((or (string= arg "-h") (string= arg "--help"))
          (print-usage)
-         (return-from parse-arguments (values nil nil nil)))
+         (return-from parse-arguments (values nil nil nil nil nil)))
         
         ;; Basic options
         ((or (string= arg "-c") (string= arg "--clean-start"))
@@ -295,6 +328,17 @@
         ((or (string= arg "-C") (string= arg "--clean-end"))
          (set-config-value 'build-config 'clean-end t))
         
+        ;; Dry run options
+        ((string= arg "--dry-run")
+         (setf dry-run t))
+        ((starts-with "--dry-run-until=" arg)
+         (let ((step-name (string-upcase (subseq arg 16))))
+           (setf dry-run t)
+           (setf dry-run-until (intern step-name "KEYWORD"))))
+        ((string= arg "--list-steps")
+         (list-steps-command)
+         (return-from parse-arguments (values nil nil nil nil nil)))
+        
         ;; Profile, already handled
         ((or (string= arg "--minimal") (string= arg "--standard") (string= arg "--full")
              (starts-with "--profile=" arg))
@@ -303,10 +347,10 @@
         ;; Profile and package group listing
         ((string= arg "--list-profiles")
          (list-profiles-command)
-         (return-from parse-arguments (values nil nil nil)))
+         (return-from parse-arguments (values nil nil nil nil nil)))
         ((string= arg "--list-package-groups")
          (list-package-groups-command)
-         (return-from parse-arguments (values nil nil nil)))
+         (return-from parse-arguments (values nil nil nil nil nil)))
         
         ;; Feature flags
         ((string= arg "--with-zfs")
@@ -370,8 +414,13 @@
                 :test #'string=)
          (setf step (intern (string-upcase arg) "KEYWORD")))))
     
+    ;; If dry-run-until is set without a step, use the last step in the process
+    (when (and dry-run-until (not (member dry-run-until '(:prepare :get :chroot :conf :build :clean))))
+      (log-message :warning "Unknown step for dry-run-until: ~A. Using :build instead." dry-run-until)
+      (setf dry-run-until :build))
+    
     ;; Return parsed values
-    (values step passthrough-args explicit-profile)))
+    (values step passthrough-args explicit-profile dry-run dry-run-until)))
 
 (defun list-profiles-command ()
   "Display available build profiles"
@@ -393,6 +442,21 @@
       
       (when features-list
         (format t "    Features: ~{~A~^, ~}~%" features-list)))
+    
+    (format t "~%")))
+
+(defun list-steps-command ()
+  "Display available build steps"
+  (format t "Available build steps:~%~%")
+  (dolist (step (list-build-steps))
+    (format t "  - ~A: ~A~%" 
+           (build-step-name step)
+           (build-step-description step))
+    
+    ;; Show dependencies if any
+    (when (build-step-dependencies step)
+      (format t "    Dependencies: ~{~A~^, ~}~%" 
+             (build-step-dependencies step)))
     
     (format t "~%")))
 
@@ -432,7 +496,7 @@
 (defun main (args)
   "Main entry point for the build system"
   ;; Parse arguments
-  (multiple-value-bind (step passthrough-args explicit-profile)
+  (multiple-value-bind (step passthrough-args explicit-profile dry-run dry-run-until)
       (parse-arguments args)
     
     (when (null step)
@@ -450,7 +514,9 @@
                     :working-dir working-dir
                     :output-dir output-dir
                     :args passthrough-args
-                    :verbose (config-value 'build-config 'verbose nil))))
+                    :verbose (config-value 'build-config 'verbose nil)
+                    :dry-run dry-run
+                    :dry-run-until dry-run-until)))
       
       ;; Print build banner
       (print-build-banner)

@@ -218,6 +218,41 @@
 ;;; Main Test Runner
 ;;; ===============================
 
+(deftest test-dry-run-basic (:category :features)
+  "Test basic dry run functionality"
+  (let* ((working-dir (uiop:getcwd))
+         (output-dir (ensure-directory 
+                      (path-join working-dir "output")))
+         (context (onefilelinux.build:make-build-context
+                   :config onefilelinux.config:*config*
+                   :working-dir working-dir
+                   :output-dir output-dir
+                   :dry-run t)))
+    
+    ;; Test dry run flag is set
+    (assert (onefilelinux.build:build-context-dry-run context))
+    
+    ;; Test dry run until is nil
+    (assert (null (onefilelinux.build:build-context-dry-run-until context)))))
+
+(deftest test-dry-run-until (:category :features)
+  "Test dry run until specific step"
+  (let* ((working-dir (uiop:getcwd))
+         (output-dir (ensure-directory 
+                      (path-join working-dir "output")))
+         (context (onefilelinux.build:make-build-context
+                   :config onefilelinux.config:*config*
+                   :working-dir working-dir
+                   :output-dir output-dir
+                   :dry-run t
+                   :dry-run-until :prepare)))
+    
+    ;; Test dry run flag is set
+    (assert (onefilelinux.build:build-context-dry-run context))
+    
+    ;; Test dry run until is set correctly
+    (assert (eq (onefilelinux.build:build-context-dry-run-until context) :prepare))))
+
 (defun run-tests ()
   "Run all tests"
   (format t "~%Running OneFileLinux tests...~%")
@@ -230,7 +265,7 @@
         (total-failed 0))
     
     ;; Run each category
-    (dolist (category '(:core :config :build))
+    (dolist (category '(:core :config :build :features))
       (multiple-value-bind (passed failed)
           (run-test-category category)
         (incf total-passed passed)

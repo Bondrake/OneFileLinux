@@ -79,8 +79,9 @@ Reducing reliance on global state by explicitly passing context objects between 
 5. **Improved Resource Management**: Better handling of system resources and cleanup operations
 6. **Configuration Schema**: Validation and organization of configuration parameters
 7. **Modular Build Steps**: Each build step is a self-contained component with clear lifecycle
-8. **Testability**: Design supports unit testing with reduced dependencies and clear interfaces
-9. **Cross-Platform Support**: Build on Linux (direct or container), macOS (container), Windows (container)
+8. **Dry Run Capability**: Support for simulating the build process without resource-intensive steps
+9. **Testability**: Design supports unit testing with reduced dependencies and clear interfaces
+10. **Cross-Platform Support**: Build on Linux (direct or container), macOS (container), Windows (container)
 
 ## Quick Start
 
@@ -100,7 +101,9 @@ The script will:
 2. Prompt you to choose between local or container-based build
 3. Provide instructions for building OneFileLinux
 
-For more detailed build instructions, see [Build Instructions](docs/build-instructions.md).
+For more detailed build instructions, see [Build Instructions](docs/build-instructions.md). 
+
+For information about the dry run feature, see [Dry Run Feature](docs/dry-run-feature.md).
 
 ## Build Process
 
