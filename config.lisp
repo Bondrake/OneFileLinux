@@ -78,16 +78,19 @@
             actual-fields (rest fields)))
     
     `(progn
+       ;; Create the structure definition without :documentation keyword
+       ;; since older SBCL versions don't support it
        (defstruct ,name
          ,@(when doc-string (list doc-string))
          ,@(mapcar (lambda (field-def)
                     (destructuring-bind (field-name &key type default documentation)
                         field-def
-                      (declare (ignore type))
-                      `(,field-name ,default :read-only nil
-                                  :documentation ,documentation)))
+                      (declare (ignore type documentation))
+                      ;; Remove :documentation keyword from the structure slots
+                      `(,field-name ,default :read-only nil)))
                   actual-fields))
        
+       ;; Still keep track of documentation in our schema registry
        (setf (gethash ',name *config-schemas*)
              (make-config-schema 
               :name ',name
@@ -107,9 +110,9 @@
        ,@(mapcar (lambda (field-def)
                   (destructuring-bind (field-name &key type default documentation)
                       field-def
-                    (declare (ignore type))
-                    `(,field-name ,default :read-only nil
-                                :documentation ,documentation)))
+                    (declare (ignore type documentation))
+                    ;; Remove :documentation keyword from the structure slots
+                    `(,field-name ,default :read-only nil)))
                 fields))
      
      (setf (gethash ',name *config-schemas*)
@@ -711,15 +714,32 @@
 ;;; Helper functions for slot manipulation
 ;;; ===============================
 
-;; Use a simpler approach that doesn't require MOP
+;; Simpler implementation without metaobject protocol
+(defun get-struct-slot-names (struct)
+  "Get structure slot names without using MOP"
+  (let ((slots '()))
+    ;; For each slot defined in the structure, try to get its name
+    ;; Just use a direct accessor approach instead of reflection
+    (handler-case
+        (loop for i from 0 below 100  ; Assume no more than 100 slots
+              for slot-name = (nth-value 
+                               0 
+                               (ignore-errors 
+                                (sb-kernel:dd-slot-name 
+                                 (sb-kernel:find-defstruct-description 
+                                  (type-of struct))
+                                 i)))
+              while slot-name
+              do (push slot-name slots))
+      (error () nil))
+    (nreverse slots)))
+
 (defmacro do-slots ((slot-var object) &body body)
-  "Iterate over all slots of an object without requiring MOP library"
+  "Iterate over all slots of an object without requiring MOP"
   (let ((obj-var (gensym "object-")))
-    `(let ((,obj-var ,object))
-       ;; We have to use a hard-coded approach to avoid MOP dependencies
-       ;; This will work for SBCL and similar implementations
-       (dolist (,slot-var (mapcar #'sb-pcl:slot-definition-name 
-                                  (sb-pcl:class-slots (class-of ,obj-var))))
+    `(let* ((,obj-var ,object)
+            (slots (get-struct-slot-names ,obj-var)))
+       (dolist (,slot-var slots)
          ,@body))))
 
 ;;; ===============================
