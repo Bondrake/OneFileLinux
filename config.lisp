@@ -243,15 +243,15 @@
   "Configuration for build requirements and dependencies"
   
   (required-tools :type list
-                 :default ("make" "gcc" "g++" "ld")
+                 :default '("make" "gcc" "g++" "ld")
                  :documentation "List of required build tools")
   
   (chroot-tools :type list
-               :default ("chroot" "mount" "umount")
+               :default '("chroot" "mount" "umount")
                :documentation "List of tools required for chroot operations")
   
   (download-tools :type list
-                 :default ("wget" "curl" "tar" "xz")
+                 :default '("wget" "curl" "tar" "xz")
                  :documentation "List of tools required for downloading and extracting")
   
   (strict-tool-check :type boolean
@@ -290,7 +290,7 @@
             :documentation "Path to SBCL inside Docker container")
   
   (entrypoint-options :type list
-                     :default ("--no-sysinit" "--no-userinit")
+                     :default '("--no-sysinit" "--no-userinit")
                      :documentation "Options for SBCL in Docker entrypoint")
   
   (auto-detect-resources :type boolean
@@ -714,33 +714,42 @@
 ;;; Helper functions for slot manipulation
 ;;; ===============================
 
-;; Simpler implementation without metaobject protocol
-(defun get-struct-slot-names (struct)
-  "Get structure slot names without using MOP"
-  (let ((slots '()))
-    ;; For each slot defined in the structure, try to get its name
-    ;; Just use a direct accessor approach instead of reflection
-    (handler-case
-        (loop for i from 0 below 100  ; Assume no more than 100 slots
-              for slot-name = (nth-value 
-                               0 
-                               (ignore-errors 
-                                (sb-kernel:dd-slot-name 
-                                 (sb-kernel:find-defstruct-description 
-                                  (type-of struct))
-                                 i)))
-              while slot-name
-              do (push slot-name slots))
-      (error () nil))
-    (nreverse slots)))
-
+;; Use a much simpler and more direct approach
 (defmacro do-slots ((slot-var object) &body body)
-  "Iterate over all slots of an object without requiring MOP"
+  "Iterate over all slots of an object without using MOP"
   (let ((obj-var (gensym "object-")))
-    `(let* ((,obj-var ,object)
-            (slots (get-struct-slot-names ,obj-var)))
-       (dolist (,slot-var slots)
-         ,@body))))
+    `(let ((,obj-var ,object))
+       ;; Use hardcoded approach - just extract slot names from the type
+       ;; This is safer and more reliable than trying to use SB-KERNEL internals
+       (let ((type-name (type-of ,obj-var)))
+         (cond
+           ;; Handle config base types explicitly - we know which slots they have
+           ((eq type-name 'system-config)
+            (dolist (,slot-var '(version alpine-version kernel-version 
+                                 alpine-minirootfs-file linux-version-string 
+                                 download-urls artifact-paths))
+              ,@body))
+           ((eq type-name 'build-config)
+            (dolist (,slot-var '(version profile clean-start clean-end verbose
+                                 build-jobs use-cache cache-dir use-swap 
+                                 interactive-config root-password
+                                 generate-random-password))
+              ,@body))
+           ((eq type-name 'feature-config)
+            (dolist (,slot-var '(version include-zfs include-btrfs
+                                 include-recovery-tools include-network-tools
+                                 include-crypto include-tui include-minimal-kernel
+                                 include-compression compression-tool enable-custom-apks))
+              ,@body))
+           ((eq type-name 'package-config)
+            (dolist (,slot-var '(version package-groups extra-packages custom-apk-sources
+                                 custom-apk-list skip-apk-build force-rebuild-apks))
+              ,@body))
+           ;; Default case - try basic slots or return empty
+           (t 
+            (dolist (,slot-var '(name description))
+              (when (ignore-errors (slot-exists-p ,obj-var ,slot-var))
+                ,@body))))))))
 
 ;;; ===============================
 ;;; Register Default Package Groups
