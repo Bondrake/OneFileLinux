@@ -57,14 +57,26 @@ RUN apk add --no-cache \
     # Full GNU utilities for kernel build (BusyBox lacks some required options)
     diffutils \
     findutils \
-    # SBCL - Steel Bank Common Lisp
-    sbcl \
+    # OpenSSL for kernel signing operations
+    openssl \
     # Package config tool for build system
     pkgconf \
+    # UUID libraries required for ZFS
+    libuuid \
+    # Extended attribute support required for ZFS
+    attr-dev \
+    # Device management support for ZFS
+    eudev-dev \
+    # RPC support required for ZFS
+    libtirpc-dev \
     # Math libraries for GCC plugins
     gmp-dev \
     mpfr-dev \
     mpc1-dev \
+    # Additional dependencies needed for ZFS
+    libunwind-dev \
+    libuuid \
+    musl-dev \
     # Performance optimizations for archive extraction
     pigz \
     pv
@@ -93,33 +105,17 @@ RUN su builder -c "ccache -M 5G" && \
     su builder -c "ccache -o compression_level=6" && \
     su builder -c "ccache -z"
 
-# Set up Quicklisp (Common Lisp package manager)
-RUN curl -o /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp && \
-    su builder -c "sbcl --load /tmp/quicklisp.lisp --eval '(quicklisp-quickstart:install)' --eval '(ql:add-to-init-file)' --eval '(quit)'" && \
-    rm /tmp/quicklisp.lisp
-
-# Install Common Lisp dependencies
-RUN su builder -c "sbcl --load /home/builder/.sbclrc --eval '(ql:quickload (list :uiop :cl-ppcre :alexandria))' --eval '(quit)'"
+# Copy entrypoint script
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Set workdir
 WORKDIR /onefilelinux
 
-# Copy Common Lisp source files to the image
-COPY --chown=builder:builder *.lisp /onefilelinux/
-COPY --chown=builder:builder *.asd /onefilelinux/
-COPY --chown=builder:builder steps /onefilelinux/steps
-COPY --chown=builder:builder kernel /onefilelinux/kernel
-COPY --chown=builder:builder package /onefilelinux/package
-COPY --chown=builder:builder github /onefilelinux/github
-COPY --chown=builder:builder docker /onefilelinux/docker
-
 # Install a healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD ps aux | grep -v grep | grep -q "sbcl\|bash" || exit 1
+    CMD ps aux | grep -v grep | grep -q "bash" || exit 1
 
-# Set entrypoint to SBCL with the entrypoint Lisp file
-ENTRYPOINT ["/usr/bin/sbcl", "--no-sysinit", "--no-userinit", \
-            "--load", "/onefilelinux/onefilelinux.asd", \
-            "--eval", "(asdf:load-system :onefilelinux)", \
-            "--load", "/onefilelinux/docker/entrypoint.lisp", \
-            "--eval", "(onefilelinux.docker.entrypoint:main uiop:*command-line-arguments*)"]
+# Set entrypoint
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["./build.sh"]

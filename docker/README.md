@@ -1,158 +1,159 @@
-# OneFileLinux Docker Build System
+# OneFileLinux Docker Build Environment
 
-This directory contains files for building OneFileLinux using Docker, providing a consistent build environment regardless of host system.
-
-## Features
-
-- Isolated build environment with all dependencies pre-installed
-- Consistent builds across different host platforms (Linux, macOS, Windows)
-- Efficient build caching for faster rebuilds
-- Proper permission handling between container and host
-- Support for all OneFileLinux build options
-- Volume mounting for persistent build artifacts
-- Easy to use command-line interface
-
-## Prerequisites
-
-- Docker (Docker Desktop for macOS/Windows, Docker Engine for Linux)
-- Docker Compose (included with Docker Desktop or install separately)
-- At least 4GB of free memory
-- At least 10GB of free disk space
+This directory contains files for building OneFileLinux using Docker, providing an isolated and consistent build environment with all dependencies pre-installed.
 
 ## Quick Start
 
-1. Make the build script executable:
-   ```bash
-   chmod +x build-onefilelinux.sh
-   ```
+```bash
+# Build the Docker image
+docker build -t onefilelinux-builder .
 
-2. Run the build with default settings:
-   ```bash
-   ./build-onefilelinux.sh
-   ```
+# Run a build with the minimal profile
+docker run -v $(pwd)/output:/output onefilelinux-builder --profile minimal
 
-3. For a full build with all features:
-   ```bash
-   ./build-onefilelinux.sh -b "--full"
-   ```
-
-4. For a minimal build:
-   ```bash
-   ./build-onefilelinux.sh -b "--minimal"
-   ```
-
-## Configuration
-
-You can configure the build by:
-
-1. Creating a `.env` file (copy from `.env.example`) and modifying variables
-2. Using command-line arguments with the `-b` or `--build-args` option
-
-Example `.env` file:
-```
-BUILD_ARGS=--minimal --use-cache
-HOST_UID=1000
-HOST_GID=1000
+# Run a build with the standard profile
+docker run -v $(pwd)/output:/output onefilelinux-builder --profile standard
 ```
 
-## Command Line Options
+## Docker Image Contents
 
-The `build-onefilelinux.sh` script supports several options:
+The Docker image includes:
+
+- Ubuntu 24.04 base system
+- SBCL (Steel Bank Common Lisp)
+- Quicklisp package manager
+- All required build dependencies
+- The OneFileLinux build system
+
+## Docker Build Options
+
+The Docker build supports various command-line options:
 
 ```
-Usage: ./build-onefilelinux.sh [options]
-
-Options:
-  -h, --help            Display this help message
-  -c, --clean           Clean the Docker environment before building
-  -v, --verbose         Enable verbose output
-  -b, --build-args ARG  Pass build arguments to the build script
-  -e, --env-file FILE   Specify a custom .env file
-  -i, --interactive     Run in interactive mode (shell inside container)
-  -p, --pull            Pull the latest base image before building
-  --no-cache            Build the Docker image without using cache
+--profile PROFILE    Build profile to use (minimal, standard, full)
+--cpu NUM            Number of CPU cores to use
+--memory NUM         Memory limit in MB
+--output-dir DIR     Directory for build output
+--github-actions     Enable GitHub Actions integration
+--help, -h           Display help message
 ```
 
-## Directory Structure
+## Using Docker Compose
 
-- `Dockerfile`: Defines the containerized build environment
-- `docker-compose.yml`: Configuration for Docker Compose
-- `build-onefilelinux.sh`: Main build script to interact with the Docker environment
-- `entrypoint.sh`: Docker container entry point that bootstraps the build process 
-- `auto-resources.sh`: Helper script to automatically detect and configure system resources
-- `.env.example`: Example environment variable file
+For convenience, you can use Docker Compose:
 
-## Build Artifacts
+1. Create a `docker-compose.yml` file:
 
-After a successful build, the output file (`OneFileLinux.efi`) will be placed in the `../output/` directory relative to this directory.
+```yaml
+version: '3'
+services:
+  builder:
+    build: ./docker
+    volumes:
+      - ./output:/output
+    command: --profile minimal
+```
+
+2. Run the build:
+
+```bash
+docker-compose up
+```
+
+## Environment Variables
+
+You can customize the build using environment variables:
+
+- `ONEFILELINUX_LOG_LEVEL`: Set logging level (debug, info, warning, error)
+- `ONEFILELINUX_PROFILE`: Default build profile (minimal, standard, full)
+- `ONEFILELINUX_PRESERVE_WORK`: Set to "true" to preserve intermediate files
+
+## Resource Usage
+
+The Docker build automatically detects available resources and adjusts build parameters accordingly. You can override these with the `--cpu` and `--memory` options.
+
+## Output Files
+
+After a successful build, you'll find the following files in the mounted output directory:
+
+- `onefilelinux-minimal.efi`: EFI executable for minimal profile
+- `onefilelinux-standard.efi`: EFI executable for standard profile
+- `onefilelinux-minimal.efi.xz`: Compressed EFI executable for minimal profile
+- `onefilelinux-standard.efi.xz`: Compressed EFI executable for standard profile
+
+## GitHub Actions Integration
+
+The Docker build environment includes special support for GitHub Actions CI/CD pipelines. Enable this with the `--github-actions` flag when running in a GitHub Actions workflow.
+
+This provides:
+- Proper GitHub Actions annotations for warnings and errors
+- Output variables for build results
+- Build logs formatted for GitHub
 
 ## Troubleshooting
 
-### Build Fails with Permission Errors
+### Common Issues
 
-If you encounter permission errors, try:
-1. Ensuring the `HOST_UID` and `HOST_GID` are set correctly in the `.env` file
-2. Running the build script with the `-c` option to clean the environment
-3. Running Docker with appropriate privileges
+1. **Permission Problems**
+   
+   If you encounter permission issues with the output directory:
+   
+   ```bash
+   docker run -v $(pwd)/output:/output --user $(id -u):$(id -g) onefilelinux-builder
+   ```
 
-### Container Runs Out of Memory
+2. **Resource Constraints**
 
-If the build process runs out of memory:
-1. Increase Docker's memory allocation in Docker Desktop settings
-2. Add `DOCKER_MEMORY=8g` to your `.env` file
-3. Use the `--use-swap` build option to enable swap inside the build
+   If the build fails due to resource constraints, try limiting resource usage:
+   
+   ```bash
+   docker run -v $(pwd)/output:/output onefilelinux-builder --cpu 2 --memory 4096
+   ```
 
-### Slow Build Performance
+3. **Docker Image Build Failures**
 
-To improve build performance:
-1. Use the `--use-cache` build option (enabled by default)
-2. Increase Docker's CPU allocation
-3. Use SSD storage for Docker volumes
+   If the Docker image fails to build, try:
+   
+   ```bash
+   docker build --no-cache -t onefilelinux-builder .
+   ```
+
+4. **Debugging Build Issues**
+
+   To debug build issues, enable debugging output:
+   
+   ```bash
+   docker run -v $(pwd)/output:/output -e ONEFILELINUX_LOG_LEVEL=debug onefilelinux-builder
+   ```
+
+   Or get a shell in the container:
+   
+   ```bash
+   docker run -it --entrypoint /bin/bash onefilelinux-builder
+   ```
 
 ## Advanced Usage
 
-### Interactive Mode
+### Custom Build Profiles
 
-You can enter an interactive shell in the container for debugging or manual builds:
-
-```bash
-./build-onefilelinux.sh -i
-```
-
-### Custom Build Steps
-
-To run specific build steps:
+You can create custom build profiles by mounting a configuration file:
 
 ```bash
-./build-onefilelinux.sh -i
-# Inside the container:
-cd /onefilelinux/build
-./build.sh get  # Only run the download step
-./build.sh build  # Only run the build step
+docker run -v $(pwd)/output:/output -v $(pwd)/my-profile.lisp:/build/profiles/custom.lisp onefilelinux-builder --profile custom
 ```
 
-### Clearing the Cache
+### Caching Build Artifacts
 
-To clear the build cache:
+For faster rebuilds, you can cache build artifacts:
 
 ```bash
-./build-onefilelinux.sh -c
+docker run -v $(pwd)/output:/output -v $(pwd)/cache:/build/cache onefilelinux-builder --use-cache
 ```
 
-## Integration with CI/CD
+### Building Multiple Profiles
 
-This Docker build system can be easily integrated with CI/CD pipelines like GitHub Actions. See the `.github/workflows` directory for examples.
+To build multiple profiles in one command:
 
-## Build System Architecture
-
-The Docker build system has been integrated with the standardized library-based build system:
-
-1. **Library-Based Build**: The Docker entrypoint automatically detects and uses the library system (80-89 range):
-   - `80_common.sh`: Logging, banners, environment detection
-   - `81_error_handling.sh`: Error handling and prerequisite checks
-   - `82_build_helper.sh`: Docker-specific functions for extraction and file handling
-   - `83_config_helper.sh`: Configuration management
-
-2. **Fallback Mode**: If the library files are not detected, the system falls back to the legacy build process using build.sh directly
-
-3. **Environment Detection**: The container automatically marks `IN_DOCKER_CONTAINER=true` for proper environment-specific handling
+```bash
+docker run -v $(pwd)/output:/output onefilelinux-builder bash -c "onefilelinux-build --profile minimal && onefilelinux-build --profile standard"
+```

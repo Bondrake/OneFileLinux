@@ -1,168 +1,123 @@
 # OneFileLinux
 
-OneFileLinux is a single-file EFI-based Linux recovery environment designed for data recovery, system repair, and diagnostics.
+OneFileLinux is a specialized Linux distribution designed to fit in a single EFI executable file, making it portable, minimal, and easy to boot on modern hardware.
 
-<img width=600 alt="OneFileLinux" src="https://hub.zhovner.com/img/one-file-linux.png" />
+## Lisp Rewrite
 
-## Project Revival and Enhancements
+This version has been completely rewritten in Common Lisp, applying modern software architecture principles and design patterns to create a more maintainable, extensible, and robust build system.
 
-OneFileLinux has been revived and massively overhauled with a focus on modern systems and advanced recovery capabilities:
+## Goals
 
-- **Modern Architecture**: Completely rebuilt with a modular, maintainable codebase
-- **Latest Technology**: Updated to Linux kernel 6.12 and Alpine Linux 3.21
-- **Advanced File Systems**: Full ZFS and Btrfs support for modern storage solutions
-- **Flexible Building**: Modular build system with minimal to full-featured options
-- **Robust Error Handling**: Comprehensive error detection and recovery mechanisms
-- **CI/CD Integration**: Automated builds and testing with GitHub Actions
-- **Docker Support**: Containerized build environment for consistent results
+1. **Improved Architecture**: Apply proper design patterns and architectural principles
+2. **Better Orthogonality**: Reduce coupling between components and improve separation of concerns
+3. **Enhanced Extensibility**: Make the system more modular and easier to extend
+4. **Increased Maintainability**: Improve code organization, naming conventions, and documentation
+5. **Cross-Platform Building**: Support for building on Linux, macOS, and Windows
 
-## Why OneFileLinux?
+## Project Structure
 
-OneFileLinux provides a powerful system recovery solution with unique advantages:
-
-- **Zero Installation Required**: No need to create additional partitions or modify your system
-- **No External Media Needed**: Once copied to your EFI partition, it's always available
-- **Boot Directly From UEFI**: No additional boot managers required
-- **Works With Encrypted Disks**: Compatible with FileVault, BitLocker, and dm-crypt
-- **Leave No Trace**: Configure for one-time boot without changing default boot sequence
-- **Hardware-Level Access**: Direct access to hardware not available in virtual machines
-
-## Features
-
-- **Single EFI File**: Boots directly from UEFI without additional bootloaders
-- **Advanced Filesystems**: Support for ZFS, Btrfs, ext4, XFS, and more
-- **Hardware Diagnostics**: Tools for hardware testing and analysis
-- **Network Support**: Ethernet, WiFi, and remote recovery capabilities
-- **Data Recovery**: Specialized tools for rescuing data from failed systems
-- **Boot Repair**: Tools to fix common boot problems across operating systems
-- **Text UI**: Full-featured text-based user interface for easy navigation
-- **Ultra Size Optimized**: Minimal builds around 7.5MB, standard builds around 50MB
-
-## Getting Started
-
-### Building with Docker (Recommended)
-
-The easiest way to build OneFileLinux is using Docker, which provides a consistent build environment:
-
-```bash
-# Clone the repository
-git clone https://github.com/zhovner/OneFileLinux.git
-cd OneFileLinux/docker
-
-# Build with default settings
-./build-onefilelinux.sh
-
-# Or build with specific options
-./build-onefilelinux.sh -b "--full"
-./build-onefilelinux.sh -b "--minimal"
+```
+/
+├── README.md                  # This file
+├── core.lisp                  # Core utilities and common functions
+├── config.lisp                # Configuration system
+├── build.lisp                 # Build orchestration system
+├── main.lisp                  # Main entry point
+├── onefilelinux.asd           # ASDF system definition
+├── build.sh                   # Bootstrap shell script
+├── build-config.sh            # Configuration for bootstrap
+├── steps/                     # Build steps implementation
+│   ├── prepare.lisp           # Environment preparation step
+│   ├── get.lisp               # Source acquisition step
+│   ├── chrootandinstall.lisp  # Chroot and package installation step
+│   ├── conf.lisp              # System configuration step
+│   └── build.lisp             # Final build and EFI creation step
+├── kernel/                    # Kernel-related utilities
+│   └── config-utils.lisp      # Kernel configuration utilities
+├── package/                   # Package management utilities
+│   └── apk-builder.lisp       # Custom APK builder
+├── docker/                    # Docker integration
+│   ├── Dockerfile             # Container definition
+│   ├── build-onefilelinux.lisp # Docker build launcher
+│   └── auto-resources.lisp    # Resource detection and allocation
+├── github/                    # GitHub Actions integration
+│   └── actions-helper.lisp    # GitHub Actions utilities
+├── tests/                     # Test suite
+│   └── run-tests.lisp         # Test runner
+└── docs/                      # Documentation
+    ├── build-instructions.md  # How to build OneFileLinux
+    ├── build-automation.md    # Build automation documentation
+    └── ...                    # Additional documentation
 ```
 
-See the [Docker build documentation](docker/README.md) for more details.
+## Design Patterns Used
 
-### Building Natively
+### Command Pattern
+Used for build steps, where each step has a clear lifecycle (prepare, execute, cleanup) and encapsulates its own functionality.
 
-If you prefer to build on your local system:
+### Strategy Pattern
+Applied for interchangeable algorithms like resource detection, package resolution, and feature configuration.
+
+### Builder Pattern
+Used in the configuration system for constructing complex configurations in a step-by-step process.
+
+### Observer Pattern
+Applied to build events and logging, allowing components to subscribe to and react to system events without coupling.
+
+### Factory Method Pattern
+Used for creating build step instances with proper initialization and registration.
+
+### Dependency Injection
+Reducing reliance on global state by explicitly passing context objects between components.
+
+## Key Improvements
+
+1. **Clear Component Boundaries**: Components have well-defined responsibilities and interfaces
+2. **Reduced Global State**: Explicit context objects instead of global variables
+3. **Proper Error Handling**: Structured condition hierarchy with specialized error types
+4. **Consistent Logging**: Centralized logging system with configurable levels and destinations
+5. **Improved Resource Management**: Better handling of system resources and cleanup operations
+6. **Configuration Schema**: Validation and organization of configuration parameters
+7. **Modular Build Steps**: Each build step is a self-contained component with clear lifecycle
+8. **Testability**: Design supports unit testing with reduced dependencies and clear interfaces
+9. **Cross-Platform Support**: Build on Linux (direct or container), macOS (container), Windows (container)
+
+## Quick Start
+
+The easiest way to build OneFileLinux is to use our automated build script which handles all dependencies:
 
 ```bash
-# Install build dependencies (Ubuntu/Debian example)
-sudo apt-get update
-sudo apt-get install build-essential git autoconf automake libtool \
-  util-linux libelf-dev libssl-dev zlib1g-dev libzstd-dev liblz4-dev \
-  upx xz-utils zstd curl wget sudo python3 gcc g++ make patch \
-  libncurses-dev e2fsprogs coreutils mtools xorriso squashfs-tools
+# Clone the repository if you haven't already
+git clone https://github.com/onefilelinux/onefilelinux.git
+cd onefilelinux
 
-# Clone the repository
-git clone https://github.com/zhovner/OneFileLinux.git
-cd OneFileLinux
-
-# Run the build
-cd build
+# Run the build setup script
 ./build.sh
 ```
 
-#### Note for macOS Users
+The script will:
+1. Check for and install required dependencies
+2. Prompt you to choose between local or container-based build
+3. Provide instructions for building OneFileLinux
 
-macOS comes with an older version of Bash (3.2) that doesn't support associative arrays needed by the build system. To build on macOS:
+For more detailed build instructions, see [Build Instructions](docs/build-instructions.md).
 
-1. Install a newer Bash with Homebrew: `brew install bash`
-2. Run the build with the newer Bash: `/usr/local/bin/bash build.sh`
+## Build Process
 
-```bash
-# macOS with Homebrew
-brew install bash coreutils automake make gnu-sed
-/usr/local/bin/bash build.sh
-```
+The build process follows the same sequence as the original implementation:
 
-## Build Options
+1. **Prepare**: Environment preparation and system detection
+2. **Get**: Download and extract Alpine Linux and kernel sources
+3. **Chroot and Install**: Set up chroot environment and install packages
+4. **Configure**: System configuration and service setup
+5. **Build**: Kernel building, APK packaging, and EFI creation
 
-OneFileLinux offers several build configurations to balance features and size:
+Each step is implemented as a separate component following the Command pattern, with clear prepare, execute, and cleanup phases.
 
-| Build Type | Description | Size | Command |
-|------------|-------------|------|---------|
-| Minimal | Core functionality only | ~7.5MB | `--minimal` |
-| Standard | Basic recovery features | ~50MB | (default) |
-| Full | All features and tools | ~70-90MB | `--full` |
+## Docker Integration
 
-### Advanced Package Groups
-
-You can customize your build with these package groups:
-
-| Package Group | Size Impact | Description | Flag | Included Packages |
-|---------------|-------------|-------------|------|-------------------|
-| Advanced FS | ~10MB | Extra filesystem tools | `--with-advanced-fs` | ntfs-3g, xfsprogs, gptfdisk, exfatprogs, f2fs-tools |
-| Disk Diagnostics | ~15MB | Hardware testing tools | `--with-disk-diag` | smartmontools, hdparm, nvme-cli, dmidecode, lshw |
-| Network Diagnostics | ~12MB | Network diagnostics | `--with-network-diag` | ethtool, nmap, wireguard-tools, openvpn |
-| System Tools | ~8MB | Advanced system utilities | `--with-system-tools` | htop, strace, pciutils, usbutils |
-| Data Recovery | ~20MB | Data rescue utilities | `--with-data-recovery` | testdisk (includes photorec) |
-| Boot Repair | ~15MB | Bootloader repair tools | `--with-boot-repair` | grub |
-| Advanced Editors | ~5MB | Text editors and tools | `--with-editors` | vim, tmux, jq |
-| Security Tools | ~10MB | Security analysis tools | `--with-security` | openssl |
-
-## Installation
-
-1. Copy the generated `OneFileLinux.efi` to your EFI System Partition (ESP):
-   ```bash
-   sudo mkdir -p /boot/efi/EFI/OneFileLinux
-   sudo cp output/OneFileLinux.efi /boot/efi/EFI/OneFileLinux/
-   ```
-
-2. Add a boot entry (optional, you can also boot it directly from UEFI):
-   ```bash
-   sudo efibootmgr --create --disk /dev/sda --part 1 --label "OneFileLinux" --loader '\EFI\OneFileLinux\OneFileLinux.efi'
-   ```
-
-3. Boot into UEFI and select OneFileLinux from the boot menu.
-
-For detailed installation instructions for macOS, Windows, and creating bootable USB drives, see the [User Guide](docs/USER_GUIDE.md).
-
-## EFI Partition Size Considerations
-
-When planning to use OneFileLinux, keep in mind these EFI partition size guidelines:
-
-- **Minimal build**: 100MB EFI partition is sufficient
-- **Standard build**: 100MB EFI partition is typically sufficient
-- **Full build**: 300MB EFI partition recommended
-
-Most modern systems have EFI partitions ranging from 100MB to 300MB.
-
-## Documentation
-
-- [User Guide](docs/USER_GUIDE.md)
-- [Docker Build Instructions](docker/README.md)
-- [Future Improvements](FUTURE_IMPROVEMENTS.md)
-- [Contributing Guidelines](CONTRIBUTING.md)
+The Docker integration provides improved resource detection and allocation, with better handling of container limitations. The GitHub Actions integration facilitates CI/CD workflows with proper reporting and annotations.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgements
-
-- Based on Alpine Linux
-- Uses the Linux kernel
-- ZFS implementation from OpenZFS
-- Many open source recovery tools
-
-## Contributing
-
-Contributions are welcome! Please see our [Contributing Guidelines](CONTRIBUTING.md) for more information.
+OneFileLinux is licensed under the MIT License. See the LICENSE file for details.

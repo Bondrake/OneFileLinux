@@ -1,10 +1,4 @@
-FoxBuild/linux-*
-FoxBuild/linux
-FoxBuild/zfs*
-FoxBuild/alpine-minirootfs/
-FoxBuild/*.tar.*
 OneFileLinux.efi
-FUTURE_IMPROVEMENTS.md
 .DS_Store
 CLAUDE.md
 
@@ -36,3 +30,6 @@ docker/.env
 
 # Claude working directory
 zclaude/
+
+# Old system backup
+zzOldSys/
