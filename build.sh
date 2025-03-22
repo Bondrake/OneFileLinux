@@ -20,6 +20,8 @@ PROJECT_ROOT="$(pwd)"
 BUILD_MODE=""
 DRY_RUN=""
 DRY_RUN_UNTIL=""
+INSTALL_SBCL_FROM_SOURCE=false
+UPGRADE_SBCL=false
 
 # Process command line arguments
 process_args() {
@@ -53,6 +55,14 @@ process_args() {
                 BUILD_MODE="all"
                 shift
                 ;;
+            --sbcl-from-source)
+                INSTALL_SBCL_FROM_SOURCE=true
+                shift
+                ;;
+            --sbcl-upgrade)
+                UPGRADE_SBCL=true
+                shift
+                ;;
             --help|-h)
                 echo "OneFileLinux Build Environment Setup"
                 echo ""
@@ -63,7 +73,9 @@ process_args() {
                 echo "  --docker             Setup for Docker build only"
                 echo "  --podman             Setup for Podman build only"
                 echo "  --container-engine ENGINE  Specify container engine (docker or podman)"
-                echo "  --all                Setup for both local and container builds (default: $DEFAULT_CONTAINER_ENGINE)"
+                echo "  --all                Setup for both local and container builds (default: $DEFAULT_CONTAINER_ENGINE)" 
+                echo "  --sbcl-from-source   Install latest SBCL from source (Ubuntu/Debian only)"
+                echo "  --sbcl-upgrade       Upgrade existing SBCL installation to latest version (Ubuntu/Debian only)"
                 echo "  --help, -h           Display this help message"
                 echo ""
                 echo "Examples:"
@@ -272,14 +284,77 @@ check_sbcl() {
     fi
 }
 
+# Install SBCL from source
+install_sbcl_from_source() {
+    echo "Installing SBCL from source (latest version)..."
+    
+    # Install dependencies for building SBCL
+    case "$DISTRO_FAMILY" in
+        debian)
+            echo "Installing build dependencies on Debian-based distribution..."
+            sudo apt-get update
+            sudo apt-get install -y git build-essential zlib1g-dev
+            
+            # Check for existing SBCL for bootstrapping
+            # If not available, install the packaged version temporarily
+            if ! command -v sbcl >/dev/null 2>&1; then
+                echo "Installing packaged SBCL for bootstrapping..."
+                sudo apt-get install -y sbcl
+            fi
+            ;;
+        *)
+            echo "Source-based installation is currently only supported on Debian-based systems."
+            return 1
+            ;;
+    esac
+    
+    # Create a temporary build directory
+    SBCL_BUILD_DIR=$(mktemp -d)
+    echo "Building in temporary directory: $SBCL_BUILD_DIR"
+    cd "$SBCL_BUILD_DIR"
+    
+    # Clone the latest SBCL source
+    git clone --depth 1 https://github.com/sbcl/sbcl.git
+    cd sbcl
+    
+    # Build SBCL
+    echo "Building SBCL (this may take several minutes)..."
+    sh make.sh --fancy
+    
+    # Install SBCL
+    echo "Installing SBCL system-wide..."
+    sudo sh install.sh
+    
+    # Clean up
+    cd "$PROJECT_ROOT"
+    rm -rf "$SBCL_BUILD_DIR"
+    
+    # Verify installation
+    if command -v sbcl >/dev/null 2>&1; then
+        SBCL_VERSION=$(sbcl --version)
+        echo "SBCL installation successful: $SBCL_VERSION"
+        return 0
+    else
+        echo "SBCL installation failed!"
+        return 1
+    fi
+}
+
 # Install SBCL and other dependencies based on distribution
 install_sbcl() {
     echo "SBCL not found. Installing Steel Bank Common Lisp..."
     
     case "$DISTRO_FAMILY" in
         debian)
-            echo "Installing SBCL on Debian-based distribution..."
-            sudo apt-get update && sudo apt-get install -y ${DEBIAN_PACKAGES[@]}
+            if [[ "$INSTALL_SBCL_FROM_SOURCE" == "true" ]]; then
+                echo "Installing SBCL from source on Debian-based distribution..."
+                install_sbcl_from_source
+                # Install additional dependencies
+                sudo apt-get update && sudo apt-get install -y curl build-essential
+            else
+                echo "Installing SBCL on Debian-based distribution..."
+                sudo apt-get update && sudo apt-get install -y ${DEBIAN_PACKAGES[@]}
+            fi
             ;;
         fedora|rhel)
             echo "Installing SBCL on Red Hat-based distribution..."
@@ -652,9 +727,16 @@ setup_local_build() {
     
     echo "Setting up for local SBCL build..."
     
-    # Check and install SBCL
+    # Check and install/upgrade SBCL
     if ! check_sbcl; then
         install_sbcl
+    elif [[ "$UPGRADE_SBCL" == "true" ]]; then
+        echo "Upgrading existing SBCL installation..."
+        if [[ "$DISTRO_FAMILY" == "debian" ]]; then
+            install_sbcl_from_source
+        else
+            echo "SBCL upgrade is only supported on Debian-based systems."
+        fi
     else
         echo "SBCL already installed."
     fi
