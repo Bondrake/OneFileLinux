@@ -293,7 +293,7 @@ install_sbcl_from_source() {
         debian)
             echo "Installing build dependencies on Debian-based distribution..."
             sudo apt-get update
-            sudo apt-get install -y git build-essential zlib1g-dev
+            sudo apt-get install -y git build-essential zlib1g-dev libzstd-dev texinfo
             
             # Check for existing SBCL for bootstrapping
             # If not available, install the packaged version temporarily
@@ -311,22 +311,62 @@ install_sbcl_from_source() {
     # Create a temporary build directory
     SBCL_BUILD_DIR=$(mktemp -d)
     echo "Building in temporary directory: $SBCL_BUILD_DIR"
-    cd "$SBCL_BUILD_DIR"
+    cd "$SBCL_BUILD_DIR" || { 
+        echo "Failed to change to build directory"; 
+        return 1; 
+    }
     
     # Clone the latest SBCL source
-    git clone --depth 1 https://github.com/sbcl/sbcl.git
-    cd sbcl
+    echo "Cloning latest SBCL source from GitHub..."
+    if ! git clone --depth 1 https://github.com/sbcl/sbcl.git; then
+        echo "Failed to clone SBCL repository"
+        cd "$PROJECT_ROOT" || true
+        rm -rf "$SBCL_BUILD_DIR"
+        return 1
+    fi
+    
+    cd sbcl || {
+        echo "Failed to change to SBCL source directory"
+        cd "$PROJECT_ROOT" || true
+        rm -rf "$SBCL_BUILD_DIR"
+        return 1
+    }
+    
+    # Create version.lisp-expr manually if git describe fails
+    if [ ! -f "version.lisp-expr" ]; then
+        echo "Creating version file manually..."
+        # Use a hardcoded version string that will be overridden during install
+        echo '"2.4.0.999-git"' > version.lisp-expr
+    fi
     
     # Build SBCL
     echo "Building SBCL (this may take several minutes)..."
-    sh make.sh --fancy
+    if ! sh make.sh --fancy; then
+        echo "SBCL build failed"
+        cd "$PROJECT_ROOT" || true
+        rm -rf "$SBCL_BUILD_DIR"
+        return 1
+    fi
+    
+    # Verify build successful
+    if [ ! -f "src/runtime/sbcl" ]; then
+        echo "SBCL build did not produce the expected binary"
+        cd "$PROJECT_ROOT" || true
+        rm -rf "$SBCL_BUILD_DIR"
+        return 1
+    fi
     
     # Install SBCL
     echo "Installing SBCL system-wide..."
-    sudo sh install.sh
+    if ! sudo sh install.sh; then
+        echo "SBCL installation failed"
+        cd "$PROJECT_ROOT" || true
+        rm -rf "$SBCL_BUILD_DIR"
+        return 1
+    fi
     
     # Clean up
-    cd "$PROJECT_ROOT"
+    cd "$PROJECT_ROOT" || true
     rm -rf "$SBCL_BUILD_DIR"
     
     # Verify installation
@@ -335,7 +375,7 @@ install_sbcl_from_source() {
         echo "SBCL installation successful: $SBCL_VERSION"
         return 0
     else
-        echo "SBCL installation failed!"
+        echo "SBCL installation failed: executable not found in PATH"
         return 1
     fi
 }
