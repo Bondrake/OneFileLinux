@@ -11,13 +11,13 @@
 ;;; Build Step Implementation - Configuration
 ;;; ----------------------------------------------------
 
-(defclass conf-step (build-step)
-  ((name :initform "conf"
+(defclass conf-step (onefilelinux.build:build-step)
+  ((name :initform :conf
          :allocation :class
-         :reader step-name)
+         :reader build-step-name)
    (description :initform "Configures system services and settings"
                 :allocation :class
-                :reader step-description))
+                :reader build-step-description))
   (:documentation "Step to configure system services and settings."))
 
 (defmethod prepare ((step conf-step) (context build-context))
@@ -349,7 +349,7 @@
 
 (defun register-conf-step ()
   "Register the conf step with the build system."
-  (onefilelinux.build:register-build-step :conf (make-conf-step)))
+  (onefilelinux.build:register-build-step (make-conf-step)))
 
 ;; Auto-register when the package is loaded
 (eval-when (:load-toplevel :execute)

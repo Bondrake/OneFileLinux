@@ -241,8 +241,8 @@
         (if (and (find-package :onefilelinux.main)
                  (find-symbol "MAIN" :onefilelinux.main))
             (progn
-              (format t "Running via onefilelinux.main:main~%")
-              (funcall (find-symbol "MAIN" :onefilelinux.main)))
+              (format t "Running via onefilelinux.main:main with args: ~S~%" args)
+              (funcall (find-symbol "MAIN" :onefilelinux.main) args))
             (progn
               (format t "Warning: onefilelinux.main:main not found!~%")
               (simulated-main)))

@@ -373,10 +373,10 @@
   "Create a new instance of the build-kernel-step."
   (make-instance 'build-kernel-step))
 
-(defun register-build-step ()
+(defun register-build-kernel-step ()
   "Register the build step with the build system."
-  (onefilelinux.build:register-build-step :build (make-build-step)))
+  (onefilelinux.build:register-build-step (make-build-step)))
 
 ;; Auto-register when the package is loaded
 (eval-when (:load-toplevel :execute)
-  (register-build-step))
+  (register-build-kernel-step))
