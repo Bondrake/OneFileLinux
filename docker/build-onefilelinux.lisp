@@ -85,20 +85,20 @@
          (cpu-limit (getf resources :cpu))
          (memory-limit (getf resources :memory)))
     
-    ;; Configure build with resource limits
-    (setf (config-value config :build :make-jobs cpu-limit)
+    ;; Configure build with resource limits using proper setf syntax
+    (setf (config-value config :build :make-jobs) 
           (max 1 (floor cpu-limit)))
     
     ;; Adjust memory-intensive operations based on available memory
     (when (< memory-limit 4096)
       (log-message :warning "Limited memory detected (~D MB). Adjusting build parameters." memory-limit)
-      (setf (config-value config :build :minimize-kernel t))
-      (setf (config-value config :build :skip-custom-packages t)))
+      (setf (config-value config :build :minimize-kernel) t)
+      (setf (config-value config :build :skip-custom-packages) t))
     
     ;; Setup GitHub workflow tracing if enabled
     (let ((github-config (docker-build-github-actions docker-config)))
       (when (and github-config (getf github-config :enabled))
-        (setf (config-value config :build :github-actions t))
+        (setf (config-value config :build :github-actions) t)
         (setup-github-build-tracing config)))
     
     ;; Run the build process
@@ -156,7 +156,7 @@
                (current-arg
                 (case current-arg
                   (:profile
-                   (setf (config-value (docker-build-config docker-config) :build :profile arg)))
+                   (setf (config-value (docker-build-config docker-config) :build :profile) arg))
                   
                   (:cpu
                    (let ((resources (docker-build-resources docker-config)))
@@ -169,10 +169,10 @@
                      (setf (docker-build-resources docker-config) resources)))
                   
                   (:output-dir
-                   (setf (config-value (docker-build-config docker-config) :build :output-dir arg)))
+                   (setf (config-value (docker-build-config docker-config) :build :output-dir) arg))
                   
                   (:log-file
-                   (setf (config-value (docker-build-config docker-config) :docker :log-file arg))))
+                   (setf (config-value (docker-build-config docker-config) :docker :log-file) arg)))
                 
                 (setf current-arg nil))
                
@@ -256,9 +256,9 @@
   "Set up build tracing for GitHub Actions."
   (log-message :debug "Setting up GitHub Actions build tracing")
   
-  ;; Add GitHub step tracing
-  (setf (config-value config :build :trace-steps t))
-  (setf (config-value config :build :trace-output-format "github")))
+  ;; Add GitHub step tracing using the correct setf syntax
+  (setf (config-value config :build :trace-steps) t)
+  (setf (config-value config :build :trace-output-format) "github"))
 
 (defun report-github-failure (error)
   "Report build failure to GitHub Actions."
@@ -319,9 +319,70 @@
 ;;; Default Configuration
 ;;; ----------------------------------------------------
 
+;; Define a configuration class for Docker builds
+(defclass configuration ()
+  ((sections :initform (make-hash-table :test 'eq)
+            :accessor configuration-sections))
+  (:documentation "Docker configuration container"))
+
+;; Docker-specific config-value implementation
+(defun config-value (config section slot &optional default)
+  "Get a configuration value from Docker config"
+  (let ((section-config (gethash section (configuration-sections config))))
+    (if (and section-config (slot-exists-p section-config slot))
+        (slot-value section-config slot)
+        default)))
+
+;; Docker-specific set-config-value implementation
+(defun (setf config-value) (value config section slot)
+  "Set a configuration value in Docker config"
+  (let ((section-config (gethash section (configuration-sections config))))
+    (unless section-config
+      (error "Unknown configuration section: ~A" section))
+    
+    (unless (slot-exists-p section-config slot)
+      (error "Unknown configuration slot ~A in section ~A" slot section))
+    
+    (setf (slot-value section-config slot) value)))
+
+;; Make-section-config function
+(defun make-section-config (section-name)
+  "Create a configuration section"
+  (case section-name
+    (:build (make-instance 'build-section-config))
+    (:features (make-instance 'feature-section-config))
+    (:docker (make-instance 'docker-section-config))
+    (t (error "Unknown section type: ~A" section-name))))
+
+;; Define section config classes
+(defclass build-section-config ()
+  ((working-dir :initform "/build" :accessor build-working-dir)
+   (output-dir :initform "/output" :accessor build-output-dir)
+   (profile :initform "minimal" :accessor build-profile)
+   (make-jobs :initform 2 :accessor build-make-jobs)
+   (minimize-kernel :initform nil :accessor build-minimize-kernel)
+   (skip-custom-packages :initform nil :accessor build-skip-custom-packages)
+   (github-actions :initform nil :accessor build-github-actions)
+   (trace-steps :initform nil :accessor build-trace-steps)
+   (trace-output-format :initform nil :accessor build-trace-output-format)))
+
+(defclass feature-section-config ()
+  ((enabled :initform nil :accessor feature-enabled)))
+
+(defclass docker-section-config ()
+  ((log-file :initform "/var/log/onefilelinux-build.log" :accessor docker-log-file)
+   (default-cpu-limit :initform 2 :accessor docker-default-cpu-limit)
+   (default-memory-limit :initform 4096 :accessor docker-default-memory-limit)))
+
 (defun make-default-config ()
   "Create a default configuration for Docker builds."
   (let ((config (make-instance 'configuration)))
+    ;; Create and add config sections
+    (let ((sections (configuration-sections config)))
+      (setf (gethash :build sections) (make-section-config :build))
+      (setf (gethash :features sections) (make-section-config :features))
+      (setf (gethash :docker sections) (make-section-config :docker)))
+    
     ;; Set Docker-specific defaults
     (setf (config-value config :build :working-dir) "/build")
     (setf (config-value config :build :output-dir) "/output")
