@@ -36,19 +36,18 @@ cat > dry-run-loader.lisp << 'EOF'
 (funcall (read-from-string "ql:quickload") :cl-ppcre :verbose t)
 (funcall (read-from-string "ql:quickload") :alexandria :verbose t)
 
-;; Change main.lisp to prevent automatic execution
-(let ((main-file "main.lisp"))
-  (with-open-file (in main-file)
-    (let ((content (make-string (file-length in))))
-      (read-sequence content in)
-      ;; Create temporary file with modified code (auto-execution disabled)
-      (with-open-file (out "temp-main.lisp" :direction :output :if-exists :supersede)
-        (write-string (cl-ppcre:regex-replace
-                       "\\(eval-when \\(:execute\\).*?\\)\\)"
-                       content
-                       "(eval-when (:execute) nil)"
-                       :single-line-mode t)
-                      out)))))
+;; Create a modified main.lisp with auto-execution disabled
+(with-open-file (out "temp-main.lisp" :direction :output :if-exists :supersede)
+  ;; Copy the original file, but disable auto-execution
+  (with-open-file (in "main.lisp")
+    (loop for line = (read-line in nil nil)
+          while line
+          do (if (and (search "(eval-when (:execute)" line)
+                       (search "main" line))
+                 ;; Replace auto-execution line with a no-op version
+                 (write-line "(eval-when (:execute) nil)" out)
+                 ;; Otherwise keep the line as is
+                 (write-line line out)))))
 
 ;; Now load the modified main file
 (format t "Loading main system...~%")
