@@ -114,6 +114,10 @@
         (format *error-output* "FATAL ERROR: ~A~%" e)
         (uiop:quit 2)))))
 
-;; Execute main function when script is loaded directly
+;; Execute main function when script is loaded directly, but only if not loaded from another script
 (eval-when (:execute)
-  (main))
+  ;; Only run main if loaded directly via --load, not when loaded as part of a system
+  (when (or (member "--" (uiop:command-line-arguments) :test #'string=)
+            (and (> (length (uiop:command-line-arguments)) 0)
+                 (not (find-package "ONEFILELINUX"))))
+    (main)))
