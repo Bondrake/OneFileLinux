@@ -156,16 +156,15 @@
   
   ;; Update APK database in chroot
   (with-chroot rootfs-dir
-    (run-command "apk" '("update") :capture-output nil))
+    (run-command "apk update" :capture-output nil))
   
   ;; Install packages
   (when packages
     (log-message :debug "Installing packages: ~{~A~^, ~}" packages)
     (with-chroot rootfs-dir
-      (apply #'run-command 
-             "apk"
-             (append '("add" "--allow-untrusted") packages)
-             '(:capture-output nil))))
+      (run-command 
+       (format nil "apk add --allow-untrusted ~{~A~^ ~}" packages)
+       :capture-output nil)))
   
   t)
 
