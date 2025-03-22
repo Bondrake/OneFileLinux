@@ -14,24 +14,24 @@
    (:file "build" :depends-on ("core" "config"))
    (:module "steps"
     :components
-    ((:file "prepare" :depends-on ("../core" "../config" "../build"))
-     (:file "get" :depends-on ("../core" "../config" "../build"))
-     (:file "chrootandinstall" :depends-on ("../core" "../config" "../build"))
-     (:file "conf" :depends-on ("../core" "../config" "../build"))
-     (:file "build" :depends-on ("../core" "../config" "../build" "../kernel/config-utils" "../package/apk-builder"))))
+    ((:file "prepare" :depends-on ("core" "config" "build"))
+     (:file "get" :depends-on ("core" "config" "build"))
+     (:file "chrootandinstall" :depends-on ("core" "config" "build"))
+     (:file "conf" :depends-on ("core" "config" "build"))
+     (:file "build" :depends-on ("core" "config" "build" "kernel/config-utils" "package/apk-builder"))))
    (:module "kernel"
     :components
-    ((:file "config-utils" :depends-on ("../core" "../config"))))
+    ((:file "config-utils" :depends-on ("core" "config"))))
    (:module "package"
     :components
-    ((:file "apk-builder" :depends-on ("../core" "../config"))))
+    ((:file "apk-builder" :depends-on ("core" "config"))))
    (:module "docker"
     :components
-    ((:file "build-onefilelinux" :depends-on ("../core" "../config" "../build"))
-     (:file "auto-resources" :depends-on ("../core"))))
+    ((:file "build-onefilelinux" :depends-on ("core" "config" "build"))
+     (:file "auto-resources" :depends-on ("core"))))
    (:module "github"
     :components
-    ((:file "actions-helper" :depends-on ("../core" "../config"))))))
+    ((:file "actions-helper" :depends-on ("core" "config"))))))
 
 ;; Define package aliases for backwards compatibility
 (defpackage :onefilelinux.util
