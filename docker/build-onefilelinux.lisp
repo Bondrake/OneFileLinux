@@ -9,6 +9,19 @@
 (in-package :onefilelinux.docker.build)
 
 ;;; ----------------------------------------------------
+;;; Global variables for Docker module
+;;; ----------------------------------------------------
+
+(defparameter *log-destinations* '(:console)
+  "Where to send log messages. List containing any of :console, :file, :syslog")
+
+(defparameter *log-file* nil
+  "File path for logging when :file is in *log-destinations*")
+
+(defparameter *log-level* :info
+  "Current logging level. One of :debug, :info, :warning, :error")
+
+;;; ----------------------------------------------------
 ;;; Docker Build Configuration
 ;;; ----------------------------------------------------
 
@@ -280,7 +293,7 @@
   (setf *log-file* "/var/log/onefilelinux-build.log")
   
   ;; Set log level based on environment variable
-  (let ((log-level (uiop:getenv "ONEFILELINUX_LOG_LEVEL")))
+  (let ((log-level (getenv "ONEFILELINUX_LOG_LEVEL")))
     (when log-level
       (setf *log-level* (parse-log-level log-level)))))
 
@@ -314,6 +327,21 @@
   "Check if string starts with prefix."
   (and (>= (length string) (length prefix))
        (string= prefix string :end2 (length prefix))))
+
+(defun run-command-output (command args)
+  "Run a command with arguments and return its output as a string."
+  (let ((cmd (format nil "~A ~{~A~^ ~}" command args)))
+    (log-message :debug "Running command: ~A" cmd)
+    (multiple-value-bind (output exit-code)
+        (run-command cmd :capture-error t :ignore-error t)
+      (unless (zerop exit-code)
+        (log-message :warning "Command returned non-zero status: ~A (status ~A)" cmd exit-code))
+      output)))
+
+(defun exit (code)
+  "Exit the program with given status code"
+  (log-message :debug "Exiting with status code ~A" code)
+  (uiop:quit code))
 
 ;;; ----------------------------------------------------
 ;;; Default Configuration
