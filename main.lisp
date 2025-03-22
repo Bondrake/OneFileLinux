@@ -38,7 +38,8 @@
 
 (defpackage :onefilelinux.main
   (:use :cl :onefilelinux.core :onefilelinux.build)
-  (:export #:main))
+  (:export #:main
+           #:display-banner))
 
 (in-package :onefilelinux.main)
 

@@ -5,7 +5,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 cd "$SCRIPT_DIR"
 
-# Disable the automatic loading
+# Create a simple loader that loads dependencies and then passes control to main.lisp
 cat > dry-run-loader.lisp << 'EOF'
 (require :asdf)
 
@@ -36,19 +36,37 @@ cat > dry-run-loader.lisp << 'EOF'
 (funcall (read-from-string "ql:quickload") :cl-ppcre :verbose t)
 (funcall (read-from-string "ql:quickload") :alexandria :verbose t)
 
-;; Now load the OneFileLinux system
-(format t "Loading OneFileLinux system...~%")
-(funcall (read-from-string "ql:quickload") "onefilelinux" :verbose t)
+;; Change main.lisp to prevent automatic execution
+(let ((main-file "main.lisp"))
+  (with-open-file (in main-file)
+    (let ((content (make-string (file-length in))))
+      (read-sequence content in)
+      ;; Create temporary file with modified code (auto-execution disabled)
+      (with-open-file (out "temp-main.lisp" :direction :output :if-exists :supersede)
+        (write-string (cl-ppcre:regex-replace
+                       "\\(eval-when \\(:execute\\).*?\\)\\)"
+                       content
+                       "(eval-when (:execute) nil)"
+                       :single-line-mode t)
+                      out)))))
 
-;; Call the main function with --dry-run
-(format t "Running dry-run mode...~%")
-(funcall (read-from-string "onefilelinux.main:display-banner"))
-(let ((args (append (list "--dry-run") (uiop:command-line-arguments))))
-  (funcall (read-from-string "onefilelinux.build:main") args))
+;; Now load the modified main file
+(format t "Loading main system...~%")
+(load "temp-main.lisp")
+
+;; Display banner and run in dry-run mode
+(format t "~%Running OneFileLinux in dry-run mode...~%~%")
+
+;; Create the argument list with --dry-run first
+(let ((args (list* "--dry-run" (copy-list (uiop:command-line-arguments)))))
+  ;; Call the main function with our arguments
+  (funcall (read-from-string "funcall") 
+           (read-from-string "onefilelinux.main:main") 
+           args))
 EOF
 
 # Run the dry-run loader
 sbcl --noinform --load "dry-run-loader.lisp" -- "$@"
 
 # Clean up
-rm dry-run-loader.lisp
+rm -f dry-run-loader.lisp temp-main.lisp
