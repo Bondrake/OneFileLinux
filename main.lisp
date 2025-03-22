@@ -14,6 +14,12 @@
 ;; Register the current directory with ASDF
 (push *default-pathname-defaults* asdf:*central-registry*)
 
+;; Suppress style warnings in SBCL to focus on errors
+#+sbcl
+(progn
+  (setf sb-ext:*muffled-warnings* 'style-warning)
+  (setf asdf:*suppress-compilation-warnings* t))
+
 ;; Load essential dependencies using Quicklisp
 (format t "Loading dependencies using Quicklisp...~%")
 (funcall (read-from-string "ql:quickload") :uiop :verbose t)
