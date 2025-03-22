@@ -6,6 +6,7 @@
   (:export
    ;; Main entry point
    #:main
+   #:print-usage
    
    ;; Build step protocol
    #:build-step
