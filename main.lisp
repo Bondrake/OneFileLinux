@@ -3,23 +3,26 @@
 
 (require :asdf)
 
-;; Ensure proper dependency loading before loading the ASDF system
-(defun ensure-dependency (name)
-  (handler-case
+;; Load Quicklisp - build.sh should ensure this is set up
+(let ((quicklisp-init (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname))))
+  (if (probe-file quicklisp-init)
       (progn
-        (format t "Loading dependency: ~A~%" name)
-        (asdf:load-system name))
-    (error (e)
-      (format t "Warning: Failed to load ~A: ~A~%" name e)
-      nil)))
+        (format t "Loading Quicklisp...~%")
+        (load quicklisp-init))
+      (error "Quicklisp not found at ~A. Please run build.sh first to set up the build environment." quicklisp-init)))
 
-;; Load essential dependencies first
-(ensure-dependency :uiop)
-(ensure-dependency :cl-ppcre)
-(ensure-dependency :alexandria)
+;; Register the current directory with ASDF
+(push *default-pathname-defaults* asdf:*central-registry*)
+
+;; Load essential dependencies using Quicklisp
+(format t "Loading dependencies using Quicklisp...~%")
+(funcall (read-from-string "ql:quickload") :uiop :verbose t)
+(funcall (read-from-string "ql:quickload") :cl-ppcre :verbose t)
+(funcall (read-from-string "ql:quickload") :alexandria :verbose t)
 
 ;; Now load the OneFileLinux system
-(asdf:load-system "onefilelinux")
+(format t "Loading OneFileLinux system...~%")
+(funcall (read-from-string "ql:quickload") "onefilelinux" :verbose t)
 
 (defpackage :onefilelinux.main
   (:use :cl :onefilelinux.core :onefilelinux.build)

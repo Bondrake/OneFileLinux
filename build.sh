@@ -328,23 +328,98 @@ install_sbcl() {
 
 # Check for Common Lisp libraries
 check_quicklisp() {
-    sbcl --noinform --non-interactive --eval "(require :asdf)" --eval "(if (probe-file \"${HOME}/.quicklisp/setup.lisp\") (quit :unix-status 0) (quit :unix-status 1))" || return 1
-    return 0
+    # Create a more thorough Quicklisp check script
+    cat > /tmp/check-quicklisp.lisp << 'EOF'
+(require :asdf)
+
+;; Check for setup.lisp existence
+(let ((ql-setup (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname))))
+  (if (probe-file ql-setup)
+      (handler-case
+          (progn
+            ;; Try to actually load and use Quicklisp
+            (load ql-setup)
+            (when (find-package :quicklisp)
+              ;; Try to execute a basic Quicklisp function
+              (funcall (read-from-string "ql:system-apropos") "alexandria")
+              ;; If we get here, it worked
+              (format t "Quicklisp is properly installed and functional.~%")
+              (quit :unix-status 0)))
+        (error (e)
+          (format t "Quicklisp exists but failed to load properly: ~A~%" e)
+          (quit :unix-status 2)))
+      (progn
+        (format t "Quicklisp setup.lisp not found.~%")
+        (quit :unix-status 1))))
+EOF
+
+    # Run the check script
+    sbcl --noinform --non-interactive --load /tmp/check-quicklisp.lisp
+    local status=$?
+    
+    # Cleanup
+    rm /tmp/check-quicklisp.lisp
+    
+    # Return appropriate status
+    if [ $status -eq 0 ]; then
+        return 0  # Properly installed and working
+    else
+        return 1  # Not installed or not working
+    fi
 }
 
 install_quicklisp() {
     echo "Installing Quicklisp for library dependencies..."
     
+    # Check if quicklisp is already installed but the check failed
+    if [ -d "$HOME/quicklisp" ]; then
+        echo "Quicklisp directory exists but may be incomplete. Repairing installation..."
+        
+        # Create a repair script that handles already-installed case
+        cat > /tmp/repair-quicklisp.lisp << 'EOF'
+(let ((ql-setup (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname))))
+  (if (probe-file ql-setup)
+      (progn
+        (format t "~%Found existing Quicklisp at ~A, loading it...~%" ql-setup)
+        (load ql-setup)
+        (format t "~%Adding Quicklisp to SBCL init file...~%")
+        (funcall (read-from-string "ql:add-to-init-file"))
+        (format t "~%Quicklisp successfully configured.~%"))
+      (progn
+        (format t "~%Installing fresh Quicklisp...~%")
+        (load "/tmp/quicklisp.lisp")
+        (funcall (read-from-string "quicklisp-quickstart:install"))
+        (funcall (read-from-string "ql:add-to-init-file"))
+        (format t "~%Quicklisp installation complete.~%"))))
+(quit)
+EOF
+        
+        # Download Quicklisp (for fresh install case)
+        curl -s -o /tmp/quicklisp.lisp "$QUICKLISP_URL"
+        
+        # Run the repair script
+        sbcl --noinform --non-interactive --load /tmp/repair-quicklisp.lisp
+        
+        # Cleanup
+        rm /tmp/repair-quicklisp.lisp
+        rm /tmp/quicklisp.lisp
+        
+        return 0
+    fi
+    
+    # Fresh installation
     # Download Quicklisp
-    curl -o /tmp/quicklisp.lisp "$QUICKLISP_URL"
+    curl -s -o /tmp/quicklisp.lisp "$QUICKLISP_URL"
     
     # Install Quicklisp
+    echo "Performing fresh Quicklisp installation..."
     sbcl --noinform --non-interactive \
         --load /tmp/quicklisp.lisp \
-        --eval '(quicklisp-quickstart:install)' \
-        --eval '(ql:add-to-init-file)' \
+        --eval '(handler-case (quicklisp-quickstart:install) (error (e) (format t "~%Note: ~A~%This is normal if Quicklisp is already installed.~%" e) (values)))' \
+        --eval '(handler-case (ql:add-to-init-file) (error (e) (format t "~%Could not add to init file: ~A~%" e) (values)))' \
         --eval '(quit)'
     
+    # Cleanup
     rm /tmp/quicklisp.lisp
 }
 
@@ -352,21 +427,64 @@ install_quicklisp() {
 install_dependencies() {
     echo "Installing required Common Lisp libraries..."
     
-    # Build QL load expressions
-    load_expressions=""
-    for lib in "${CL_LIBS[@]}"; do
-        load_expressions="${load_expressions} --eval '(ql:quickload :$lib :verbose t)'"
-    done
-    
-    # Use eval to execute the dynamic command
+    # Create a more resilient dependency loader script
+    cat > /tmp/load-dependencies.lisp << 'EOF'
+(require :asdf)
+
+;; Try to load Quicklisp
+(let ((ql-setup (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname))))
+  (if (probe-file ql-setup)
+      (progn
+        (format t "~%Loading Quicklisp from ~A...~%" ql-setup)
+        (load ql-setup)
+        (format t "Quicklisp loaded successfully.~%"))
+      (error "Quicklisp setup not found at ~A. Please reinstall Quicklisp."
+             ql-setup)))
+
+;; Set verbose mode
+(when (find-package :quicklisp)
+  (setf (symbol-value (read-from-string "ql:*quickload-verbose*")) t))
+
+;; Define dependency loading function with error handling
+(defun safe-load-dependency (lib-name)
+  (format t "~%Loading dependency: ~A~%" lib-name)
+  (handler-case
+      (progn
+        (funcall (read-from-string "ql:quickload") lib-name)
+        (format t "~A loaded successfully~%" lib-name)
+        t)
+    (error (e)
+      (format t "~%Warning: Failed to load ~A: ~A~%" lib-name e)
+      nil)))
+
+;; Load each dependency with proper error handling
+(defvar *loaded-count* 0)
+(defvar *failed-count* 0)
+(defvar *lib-list* '(:uiop :cl-ppcre :alexandria))
+
+(dolist (lib *lib-list*)
+  (if (safe-load-dependency lib)
+      (incf *loaded-count*)
+      (incf *failed-count*)))
+
+;; Report results
+(format t "~%~%Dependency loading complete:~%")
+(format t "  ~D packages loaded successfully~%" *loaded-count*)
+(format t "  ~D packages failed to load~%" *failed-count*)
+
+(if (zerop *failed-count*)
+    (format t "~%All dependencies loaded successfully.~%")
+    (format t "~%Warning: Some dependencies failed to load.~%"))
+
+(quit)
+EOF
+
+    # Execute the dependency loader script
     echo "Loading dependencies: ${CL_LIBS[*]}"
-    eval "sbcl --noinform --non-interactive \
-        --eval '(require :asdf)' \
-        --eval '(load \"~/.quicklisp/setup.lisp\")' \
-        --eval '(setf ql:*quickload-verbose* t)' \
-        $load_expressions \
-        --eval '(format t \"~%All dependencies loaded successfully~%\")' \
-        --eval '(quit)'"
+    sbcl --noinform --non-interactive --load /tmp/load-dependencies.lisp
+    
+    # Cleanup
+    rm /tmp/load-dependencies.lisp
 }
 
 # Check Docker installation
