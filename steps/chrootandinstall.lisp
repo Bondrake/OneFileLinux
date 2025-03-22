@@ -207,7 +207,7 @@
 
 (defun register-chrootandinstall-step ()
   "Register the chrootandinstall step with the build system."
-  (register-build-step "chrootandinstall" #'make-chrootandinstall-step))
+  (register-build-step (make-chrootandinstall-step)))
 
 ;; Auto-register when the package is loaded
 (eval-when (:load-toplevel :execute)
