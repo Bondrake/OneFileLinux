@@ -17,8 +17,12 @@
 ;; Suppress style warnings in SBCL to focus on errors
 #+sbcl
 (progn
+  ;; Muffle style warnings in the compiler
   (setf sb-ext:*muffled-warnings* 'style-warning)
-  (setf asdf:*suppress-compilation-warnings* t))
+  
+  ;; Try to find ASDF variable if it exists (may not exist in all SBCL versions)
+  (when (find-symbol "*SUPPRESS-COMPILATION-WARNINGS*" :asdf)
+    (setf (symbol-value (find-symbol "*SUPPRESS-COMPILATION-WARNINGS*" :asdf)) t)))
 
 ;; Load essential dependencies using Quicklisp
 (format t "Loading dependencies using Quicklisp...~%")
