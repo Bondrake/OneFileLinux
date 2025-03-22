@@ -31,9 +31,16 @@
    
    ;; Error handling
    #:onefilelinux-error
+   #:error-message
+   #:error-context
    #:command-error
+   #:command-error-command
+   #:command-error-exit-code
+   #:command-error-output
    #:configuration-error
+   #:configuration-error-key
    #:file-system-error
+   #:file-system-error-path
    #:with-error-handling
    #:report-error
    
