@@ -711,14 +711,16 @@
 ;;; Helper functions for slot manipulation
 ;;; ===============================
 
-;; SBCL-specific implementation for slot iteration
+;; Use a simpler approach that doesn't require MOP
 (defmacro do-slots ((slot-var object) &body body)
-  "Iterate over all slots of an object using SBCL's MOP"
+  "Iterate over all slots of an object without requiring MOP library"
   (let ((obj-var (gensym "object-")))
     `(let ((,obj-var ,object))
-       (loop for ,slot-var in (mapcar #'sb-mop:slot-definition-name 
-                                     (sb-mop:class-slots (class-of ,obj-var)))
-             do (progn ,@body)))))
+       ;; We have to use a hard-coded approach to avoid MOP dependencies
+       ;; This will work for SBCL and similar implementations
+       (dolist (,slot-var (mapcar #'sb-pcl:slot-definition-name 
+                                  (sb-pcl:class-slots (class-of ,obj-var))))
+         ,@body))))
 
 ;;; ===============================
 ;;; Register Default Package Groups
